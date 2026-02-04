@@ -1,0 +1,82 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export type Topic = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: 'in_progress' | 'complete' | 'historical';
+  environment: 'dev' | 'sit' | 'cat' | 'prod' | null;
+  owner_team: string | null;
+  naming_valid: boolean;
+  naming_issues: string | null;
+  partition_count: number | null;
+  replication_factor: number | null;
+  retention_ms: number | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+};
+
+export type SchemaVersion = {
+  id: string;
+  topic_id: string;
+  version: number;
+  schema_definition: any;
+  changes_description: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type PerformanceMetric = {
+  id: string;
+  topic_id: string;
+  timestamp: string;
+  consumer_lag: number | null;
+  messages_per_second: number | null;
+  bytes_per_second: number | null;
+  error_rate: number | null;
+  partition_metrics: any;
+  notes: string | null;
+};
+
+export type TopicLineage = {
+  id: string;
+  source_topic_id: string;
+  target_topic_id: string;
+  relationship_type: 'produces_to' | 'consumes_from' | 'transforms_to';
+  description: string | null;
+  created_at: string;
+};
+
+export type Update = {
+  id: string;
+  topic_id: string;
+  update_date: string;
+  status_update: string | null;
+  blockers: string | null;
+  next_steps: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type Alert = {
+  id: string;
+  topic_id: string | null;
+  alert_type: 'naming_violation' | 'performance_degradation' | 'schema_issue' | 'manual';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  title: string;
+  description: string | null;
+  resolved: boolean;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  created_at: string;
+};

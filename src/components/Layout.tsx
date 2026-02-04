@@ -1,0 +1,91 @@
+import { ReactNode } from 'react';
+import {
+  LayoutDashboard,
+  ListChecks,
+  AlertCircle,
+  GitBranch,
+  Activity,
+  FileText,
+  Network,
+  Phone
+} from 'lucide-react';
+
+interface LayoutProps {
+  children: ReactNode;
+  currentView: string;
+  onViewChange: (view: string) => void;
+}
+
+export default function Layout({ children, currentView, onViewChange }: LayoutProps) {
+  const navItems = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'topics', label: 'All Topics', icon: ListChecks },
+    { id: 'standup', label: 'Morning Standup', icon: Activity },
+    { id: 'alerts', label: 'Alerts', icon: AlertCircle },
+    { id: 'lineage', label: 'Topic Lineage', icon: GitBranch },
+    { id: 'oncall', label: 'On-Call & Escalation', icon: Phone },
+    { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'architecture', label: 'Architecture', icon: Network },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <nav className="bg-white border-b border-slate-200 shadow-sm">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-2 rounded-lg">
+                <Activity className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">Kafka EEB Monitoring</h1>
+                <p className="text-sm text-slate-500">Event-Driven Ingestion Dashboard</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="text-right">
+                <p className="text-sm font-medium text-slate-700">
+                  {new Date().toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <div className="flex">
+        <aside className="w-64 bg-white border-r border-slate-200 min-h-[calc(100vh-73px)] shadow-sm">
+          <nav className="p-4 space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentView === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onViewChange(item.id)}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-700 font-medium shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <main className="flex-1 p-8">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

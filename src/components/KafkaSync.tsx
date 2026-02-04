@@ -1,0 +1,312 @@
+import { useState } from 'react';
+import { RefreshCw, CheckCircle, AlertCircle, Info, X } from 'lucide-react';
+
+interface KafkaSyncProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSyncComplete: () => void;
+}
+
+interface SyncResults {
+  synced: number;
+  updated: number;
+  failed: number;
+  errors: string[];
+}
+
+export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSyncProps) {
+  const [syncing, setSyncing] = useState(false);
+  const [results, setResults] = useState<SyncResults | null>(null);
+  const [formData, setFormData] = useState({
+    kafkaAdminUrl: import.meta.env.VITE_CONFLUENT_ADMIN_URL || '',
+    clusterId: import.meta.env.VITE_CONFLUENT_CLUSTER_ID || '',
+    kafkaApiKey: import.meta.env.VITE_CONFLUENT_API_KEY || '',
+    kafkaApiSecret: import.meta.env.VITE_CONFLUENT_API_SECRET || ''
+  });
+
+  const handleSync = async () => {
+    if (!formData.kafkaAdminUrl) {
+      alert('Please enter Kafka Admin API URL');
+      return;
+    }
+
+    if (!formData.clusterId) {
+      alert('Please enter Cluster ID');
+      return;
+    }
+
+    // Validate that the URL and Cluster ID are not swapped
+    if (!formData.kafkaAdminUrl.startsWith('http://') && !formData.kafkaAdminUrl.startsWith('https://')) {
+      alert('❌ Kafka Admin API URL must start with https://\n\nIt looks like you may have entered the Cluster ID in this field. Please check your values.');
+      return;
+    }
+
+    if (formData.clusterId.startsWith('http://') || formData.clusterId.startsWith('https://')) {
+      alert('❌ Cluster ID should be just the ID (e.g., lkc-33v902), not a full URL.\n\nIt looks like you may have entered the full URL in this field. Please check your values.');
+      return;
+    }
+
+    setSyncing(true);
+    setResults(null);
+
+    try {
+      // Use Python backend API instead of edge function
+      const apiUrl = import.meta.env.DEV
+        ? 'http://localhost:5000/api/sync-kafka-topics'
+        : '/api/sync-kafka-topics';
+
+      console.log('Calling Python backend at:', apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Backend error response:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          throw new Error(`Server error (${response.status}): ${errorText || response.statusText}`);
+        }
+        throw new Error(errorData.error || `Server error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Sync failed');
+      }
+
+      setResults(data.results);
+
+      if (data.results.synced > 0 || data.results.updated > 0) {
+        setTimeout(() => {
+          onSyncComplete();
+        }, 2000);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error occurred';
+      alert(`Sync failed: ${errorMessage}`);
+      console.error('Kafka sync error:', error);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleReset = () => {
+    setResults(null);
+    setFormData({
+      kafkaAdminUrl: import.meta.env.VITE_CONFLUENT_ADMIN_URL || '',
+      clusterId: import.meta.env.VITE_CONFLUENT_CLUSTER_ID || '',
+      kafkaApiKey: import.meta.env.VITE_CONFLUENT_API_KEY || '',
+      kafkaApiSecret: import.meta.env.VITE_CONFLUENT_API_SECRET || ''
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <RefreshCw className="w-6 h-6 text-blue-600" />
+            <h2 className="text-2xl font-bold text-slate-900">Sync from Kafka</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {!results && (
+            <>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-blue-900 mb-1">About Kafka Sync</h3>
+                    <p className="text-sm text-blue-800">
+                      This will connect to your Kafka cluster and sync topic metadata including:
+                    </p>
+                    <ul className="text-sm text-blue-800 mt-2 space-y-1 list-disc list-inside">
+                      <li>Topic names and configurations</li>
+                      <li>Partition counts and replication factors</li>
+                      <li>Retention policies</li>
+                      <li>Automatic naming validation</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Kafka REST API Endpoint *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.kafkaAdminUrl}
+                    onChange={(e) => setFormData({ ...formData, kafkaAdminUrl: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="https://lkc-xxxxx.region.provider.confluent.cloud"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    ⚠️ Enter the REST API endpoint URL (without port)
+                  </p>
+                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                    Example: https://lkc-33v902.dom4gl8rd6w.eastus.azure.confluent.cloud
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Cluster ID * (Short ID Only)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.clusterId}
+                    onChange={(e) => setFormData({ ...formData, clusterId: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="lkc-xxxxx"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    ⚠️ Enter ONLY the cluster ID (e.g., lkc-33v902), NOT the full URL
+                  </p>
+                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                    Example: lkc-33v902
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    API Key (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.kafkaApiKey}
+                    onChange={(e) => setFormData({ ...formData, kafkaApiKey: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="API Key"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    API Secret (Optional)
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.kafkaApiSecret}
+                    onChange={(e) => setFormData({ ...formData, kafkaApiSecret: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="API Secret"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Required for Confluent Cloud or secured clusters
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Note:</strong> Existing topics will be updated with latest metadata.
+                      New topics discovered will be added with "In Progress" status.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={onClose}
+                  className="px-6 py-3 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSync}
+                  disabled={syncing || !formData.kafkaAdminUrl}
+                  className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                >
+                  <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
+                  <span>{syncing ? 'Syncing...' : 'Sync Topics'}</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {results && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-green-900">{results.synced}</p>
+                  <p className="text-sm text-green-700">New Topics</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                  <RefreshCw className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-blue-900">{results.updated}</p>
+                  <p className="text-sm text-blue-700">Updated</p>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                  <AlertCircle className="w-8 h-8 text-red-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-red-900">{results.failed}</p>
+                  <p className="text-sm text-red-700">Failed</p>
+                </div>
+              </div>
+
+              {results.errors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-red-900 mb-2">Errors</h4>
+                  <ul className="text-sm text-red-800 space-y-1 max-h-40 overflow-y-auto">
+                    {results.errors.map((error, idx) => (
+                      <li key={idx}>• {error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {results.synced > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="text-sm text-green-800">
+                    <strong>Success!</strong> Topics have been synced. Check the Alerts page for any naming violations.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={handleReset}
+                  className="px-6 py-3 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                >
+                  Sync Again
+                </button>
+                <button
+                  onClick={() => {
+                    handleReset();
+                    onClose();
+                  }}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
