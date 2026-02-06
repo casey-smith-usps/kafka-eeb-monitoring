@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, CheckCircle, AlertCircle, Info, X } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Info, X, GitBranch } from 'lucide-react';
 
 interface KafkaSyncProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface SyncResults {
   synced: number;
   updated: number;
   failed: number;
+  schemas_synced?: number;
   errors: string[];
 }
 
@@ -18,10 +19,13 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
   const [syncing, setSyncing] = useState(false);
   const [results, setResults] = useState<SyncResults | null>(null);
   const [formData, setFormData] = useState({
+    cloudProvider: 'Azure',
+    clusterName: 'DEV Azure',
     kafkaAdminUrl: import.meta.env.VITE_CONFLUENT_ADMIN_URL || '',
     clusterId: import.meta.env.VITE_CONFLUENT_CLUSTER_ID || '',
     kafkaApiKey: import.meta.env.VITE_CONFLUENT_API_KEY || '',
-    kafkaApiSecret: import.meta.env.VITE_CONFLUENT_API_SECRET || ''
+    kafkaApiSecret: import.meta.env.VITE_CONFLUENT_API_SECRET || '',
+    schemaRegistryUrl: ''
   });
 
   const handleSync = async () => {
@@ -62,6 +66,15 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          cloud_provider: formData.cloudProvider,
+          cluster_name: formData.clusterName,
+          cluster_id: formData.clusterId,
+          admin_url: formData.kafkaAdminUrl,
+          api_key: formData.kafkaApiKey,
+          api_secret: formData.kafkaApiSecret,
+          schema_registry_url: formData.schemaRegistryUrl
+        })
       });
 
       if (!response.ok) {
@@ -101,10 +114,13 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
   const handleReset = () => {
     setResults(null);
     setFormData({
+      cloudProvider: 'Azure',
+      clusterName: 'DEV Azure',
       kafkaAdminUrl: import.meta.env.VITE_CONFLUENT_ADMIN_URL || '',
       clusterId: import.meta.env.VITE_CONFLUENT_CLUSTER_ID || '',
       kafkaApiKey: import.meta.env.VITE_CONFLUENT_API_KEY || '',
-      kafkaApiSecret: import.meta.env.VITE_CONFLUENT_API_SECRET || ''
+      kafkaApiSecret: import.meta.env.VITE_CONFLUENT_API_SECRET || '',
+      schemaRegistryUrl: ''
     });
   };
 
@@ -148,6 +164,40 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
               </div>
 
               <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Cloud Provider *
+                  </label>
+                  <select
+                    value={formData.cloudProvider}
+                    onChange={(e) => setFormData({ ...formData, cloudProvider: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Azure">Azure</option>
+                    <option value="GCP">GCP</option>
+                    <option value="AWS">AWS</option>
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Select the cloud provider where this Kafka cluster is hosted
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Cluster Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.clusterName}
+                    onChange={(e) => setFormData({ ...formData, clusterName: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="DEV Azure"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Human-readable name (e.g., "DEV Azure", "PROD GCP")
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Kafka REST API Endpoint *
@@ -214,6 +264,25 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
                     Required for Confluent Cloud or secured clusters
                   </p>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Schema Registry URL (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.schemaRegistryUrl}
+                    onChange={(e) => setFormData({ ...formData, schemaRegistryUrl: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="https://psrc-xxxxx.region.provider.confluent.cloud"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Enter to sync schema versions from Confluent Schema Registry
+                  </p>
+                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                    Example: https://psrc-xxxxx.us-east-2.aws.confluent.cloud
+                  </p>
+                </div>
               </div>
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -249,7 +318,7 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
 
           {results && (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className={`grid ${results.schemas_synced !== undefined ? 'grid-cols-4' : 'grid-cols-3'} gap-4`}>
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                   <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
                   <p className="text-2xl font-bold text-green-900">{results.synced}</p>
@@ -260,6 +329,13 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
                   <p className="text-2xl font-bold text-blue-900">{results.updated}</p>
                   <p className="text-sm text-blue-700">Updated</p>
                 </div>
+                {results.schemas_synced !== undefined && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+                    <GitBranch className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                    <p className="text-2xl font-bold text-purple-900">{results.schemas_synced}</p>
+                    <p className="text-sm text-purple-700">Schemas</p>
+                  </div>
+                )}
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
                   <AlertCircle className="w-8 h-8 text-red-600 mx-auto mb-2" />
                   <p className="text-2xl font-bold text-red-900">{results.failed}</p>

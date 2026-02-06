@@ -14,6 +14,8 @@ export default function IngestProjectsImport({ isOpen, onClose, onImportComplete
   const [importResults, setImportResults] = useState<{
     success: number;
     failed: number;
+    updated: number;
+    created: number;
     errors: string[];
   } | null>(null);
   const [previewData, setPreviewData] = useState<any[]>([]);
@@ -78,6 +80,8 @@ export default function IngestProjectsImport({ isOpen, onClose, onImportComplete
     const results = {
       success: 0,
       failed: 0,
+      updated: 0,
+      created: 0,
       errors: [] as string[]
     };
 
@@ -89,8 +93,13 @@ export default function IngestProjectsImport({ isOpen, onClose, onImportComplete
           continue;
         }
 
-        await ingestProjectsService.create(row);
+        const result = await ingestProjectsService.upsertByTitle(row);
         results.success++;
+        if (result.isNew) {
+          results.created++;
+        } else {
+          results.updated++;
+        }
       } catch (error: any) {
         results.failed++;
         results.errors.push(`${row.title}: ${error.message || 'Unknown error'}`);
@@ -139,6 +148,7 @@ export default function IngestProjectsImport({ isOpen, onClose, onImportComplete
                   <li>Prepare your Excel file with columns: Title, Status, Prod Date, Owner, Status2, Tasks</li>
                   <li>Upload the Excel file</li>
                   <li>Review the preview and click Import</li>
+                  <li>Projects with matching titles will be updated, new ones will be created</li>
                   <li>You can edit environments, dates, and add notes after import</li>
                 </ol>
               </div>
@@ -221,13 +231,22 @@ export default function IngestProjectsImport({ isOpen, onClose, onImportComplete
 
           {importResults && (
             <div className="space-y-4">
-              <div className="flex items-center justify-center space-x-4">
-                {importResults.success > 0 && (
+              <div className="flex items-center justify-center space-x-6">
+                {importResults.created > 0 && (
                   <div className="flex items-center space-x-2 text-green-700">
                     <CheckCircle className="w-8 h-8" />
                     <div>
-                      <p className="text-2xl font-bold">{importResults.success}</p>
-                      <p className="text-sm">Imported</p>
+                      <p className="text-2xl font-bold">{importResults.created}</p>
+                      <p className="text-sm">Created</p>
+                    </div>
+                  </div>
+                )}
+                {importResults.updated > 0 && (
+                  <div className="flex items-center space-x-2 text-blue-700">
+                    <CheckCircle className="w-8 h-8" />
+                    <div>
+                      <p className="text-2xl font-bold">{importResults.updated}</p>
+                      <p className="text-sm">Updated</p>
                     </div>
                   </div>
                 )}

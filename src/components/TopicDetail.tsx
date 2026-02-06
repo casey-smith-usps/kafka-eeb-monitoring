@@ -197,6 +197,14 @@ export default function TopicDetail({ topicId, onBack, onEdit }: TopicDetailProp
                     <dd className="text-sm font-medium text-slate-900">{topic.environment || 'Not set'}</dd>
                   </div>
                   <div>
+                    <dt className="text-sm text-slate-500">Cloud Provider</dt>
+                    <dd className="text-sm font-medium text-slate-900">{topic.cloud_provider || 'Not set'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-slate-500">Cluster</dt>
+                    <dd className="text-sm font-medium text-slate-900">{topic.cluster_name || topic.cluster_id || 'Not set'}</dd>
+                  </div>
+                  <div>
                     <dt className="text-sm text-slate-500">Owner Team</dt>
                     <dd className="text-sm font-medium text-slate-900">{topic.owner_team || 'Not set'}</dd>
                   </div>
@@ -217,6 +225,28 @@ export default function TopicDetail({ topicId, onBack, onEdit }: TopicDetailProp
                 </dl>
               </div>
               <div>
+                <h4 className="font-semibold text-slate-900 mb-3">Topic Structure</h4>
+                <dl className="space-y-2 mb-4">
+                  {topic.domain && (
+                    <div>
+                      <dt className="text-sm text-slate-500">Domain</dt>
+                      <dd className="text-sm font-medium text-slate-900">{topic.domain}</dd>
+                    </div>
+                  )}
+                  {topic.subdomain && (
+                    <div>
+                      <dt className="text-sm text-slate-500">Subdomain</dt>
+                      <dd className="text-sm font-medium text-slate-900">{topic.subdomain}</dd>
+                    </div>
+                  )}
+                  {topic.dataset && (
+                    <div>
+                      <dt className="text-sm text-slate-500">Dataset</dt>
+                      <dd className="text-sm font-medium text-slate-900">{topic.dataset}</dd>
+                    </div>
+                  )}
+                </dl>
+
                 <h4 className="font-semibold text-slate-900 mb-3">Naming Validation</h4>
                 <div className={`p-4 rounded-lg ${topic.naming_valid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                   <p className={`font-medium ${topic.naming_valid ? 'text-green-900' : 'text-red-900'}`}>

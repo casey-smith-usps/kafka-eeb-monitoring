@@ -15,7 +15,11 @@ interface KPIData {
   weeklyProgress: number;
 }
 
-export default function KPIDashboard() {
+interface KPIDashboardProps {
+  onNavigate?: (view: string) => void;
+}
+
+export default function KPIDashboard({ onNavigate }: KPIDashboardProps = {}) {
   const [kpis, setKpis] = useState<KPIData>({
     totalTopics: 0,
     topicsByEnv: {},
@@ -212,15 +216,18 @@ export default function KPIDashboard() {
             Pipeline Health Metrics
           </h4>
           <div className="space-y-4">
-            <div>
+            <button
+              onClick={() => onNavigate?.('alerts')}
+              className="w-full text-left p-3 rounded-lg hover:bg-red-50 border-2 border-transparent hover:border-red-200 transition-all cursor-pointer"
+            >
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Topics with Issues</span>
-                <span className="text-lg font-bold text-slate-900">{kpis.topicsWithIssues}</span>
+                <span className="text-sm text-slate-600 font-medium">Topics with Issues</span>
+                <span className="text-lg font-bold text-red-600">{kpis.topicsWithIssues}</span>
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Naming violations or active alerts
+                Naming violations or active alerts - Click to view →
               </div>
-            </div>
+            </button>
             <div className="border-t border-slate-200 pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600">Total Active Topics</span>

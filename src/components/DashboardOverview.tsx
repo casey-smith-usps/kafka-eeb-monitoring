@@ -42,6 +42,14 @@ export default function DashboardOverview({ onNavigate }: DashboardOverviewProps
         ingestProjectsService.getAll()
       ]);
 
+      console.log('Dashboard loaded topics:', topics.length);
+      console.log('By environment:', {
+        dev: topics.filter(t => t.environment === 'dev').length,
+        sit: topics.filter(t => t.environment === 'sit').length,
+        cat: topics.filter(t => t.environment === 'cat').length,
+        prod: topics.filter(t => t.environment === 'prod').length
+      });
+
       const unresolvedAlerts = alerts.filter((a: any) => !a.resolved);
 
       setStats({
@@ -54,10 +62,10 @@ export default function DashboardOverview({ onNavigate }: DashboardOverviewProps
         todayUpdates: todayUpdates.length,
         recentSchemaChanges: 0,
         totalProjects: projects.length,
-        projectsInDev: projects.filter(p => p.environment === 'dev').length,
-        projectsInSit: projects.filter(p => p.environment === 'sit').length,
-        projectsInCat: projects.filter(p => p.environment === 'cat').length,
-        projectsInProd: projects.filter(p => p.prod_completed_date !== null).length
+        projectsInDev: topics.filter(t => t.environment === 'dev').length,
+        projectsInSit: topics.filter(t => t.environment === 'sit').length,
+        projectsInCat: topics.filter(t => t.environment === 'cat').length,
+        projectsInProd: topics.filter(t => t.environment === 'prod').length
       });
 
       setRecentAlerts(unresolvedAlerts.slice(0, 5));
@@ -85,7 +93,7 @@ export default function DashboardOverview({ onNavigate }: DashboardOverviewProps
         <p className="text-slate-500 mt-1">Monitor your Kafka topic ingestion pipeline</p>
       </div>
 
-      <KPIDashboard />
+      <KPIDashboard onNavigate={onNavigate} />
 
       <div className="grid grid-cols-5 gap-4">
         <button
@@ -173,26 +181,38 @@ export default function DashboardOverview({ onNavigate }: DashboardOverviewProps
         <div className="bg-white rounded-xl border-2 border-slate-200 p-5">
           <div className="flex items-center space-x-3 mb-1">
             <FolderKanban className="w-5 h-5 text-green-600" />
-            <h3 className="font-semibold text-slate-900">Projects by Environment</h3>
+            <h3 className="font-semibold text-slate-900">Topics by Environment</h3>
           </div>
           <div className="mt-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Dev</span>
-                <span className="text-lg font-bold text-blue-600">{stats.projectsInDev}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">SIT</span>
-                <span className="text-lg font-bold text-amber-600">{stats.projectsInSit}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">CAT</span>
-                <span className="text-lg font-bold text-purple-600">{stats.projectsInCat}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Prod</span>
-                <span className="text-lg font-bold text-green-600">{stats.projectsInProd}</span>
-              </div>
+              <button
+                onClick={() => onNavigate?.('topics')}
+                className="flex items-center justify-between p-3 rounded-lg bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 transition-all cursor-pointer"
+              >
+                <span className="text-sm font-medium text-blue-700">Dev</span>
+                <span className="text-xl font-bold text-blue-600">{stats.projectsInDev}</span>
+              </button>
+              <button
+                onClick={() => onNavigate?.('topics')}
+                className="flex items-center justify-between p-3 rounded-lg bg-amber-50 hover:bg-amber-100 border-2 border-amber-200 transition-all cursor-pointer"
+              >
+                <span className="text-sm font-medium text-amber-700">SIT</span>
+                <span className="text-xl font-bold text-amber-600">{stats.projectsInSit}</span>
+              </button>
+              <button
+                onClick={() => onNavigate?.('topics')}
+                className="flex items-center justify-between p-3 rounded-lg bg-orange-50 hover:bg-orange-100 border-2 border-orange-200 transition-all cursor-pointer"
+              >
+                <span className="text-sm font-medium text-orange-700">CAT</span>
+                <span className="text-xl font-bold text-orange-600">{stats.projectsInCat}</span>
+              </button>
+              <button
+                onClick={() => onNavigate?.('topics')}
+                className="flex items-center justify-between p-3 rounded-lg bg-red-50 hover:bg-red-100 border-2 border-red-200 transition-all cursor-pointer"
+              >
+                <span className="text-sm font-medium text-red-700">Prod</span>
+                <span className="text-xl font-bold text-red-600">{stats.projectsInProd}</span>
+              </button>
             </div>
           </div>
         </div>

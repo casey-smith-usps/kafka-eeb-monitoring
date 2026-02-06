@@ -3,13 +3,43 @@ import { validateTopicName } from '../utils/namingValidator';
 
 export const topicsService = {
   async getAll() {
-    const { data, error } = await supabase
-      .from('topics')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Supabase has a default 1000 row limit - we need to paginate to get all records
+    let allData: Topic[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (error) throw error;
-    return data as Topic[];
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('topics')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        allData = allData.concat(data);
+        page++;
+        hasMore = data.length === pageSize;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    console.log('✅ Loaded ALL topics:', allData.length);
+    console.log('By environment:', {
+      dev: allData.filter(t => t.environment === 'dev').length,
+      sit: allData.filter(t => t.environment === 'sit').length,
+      cat: allData.filter(t => t.environment === 'cat').length,
+      prod: allData.filter(t => t.environment === 'prod').length
+    });
+    console.log('By status:', {
+      complete: allData.filter(t => t.status === 'complete').length,
+      in_progress: allData.filter(t => t.status === 'in_progress').length,
+      historical: allData.filter(t => t.status === 'historical').length
+    });
+    return allData;
   },
 
   async getByStatus(status: string) {
@@ -17,7 +47,8 @@ export const topicsService = {
       .from('topics')
       .select('*')
       .eq('status', status)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10000);
 
     if (error) throw error;
     return data as Topic[];
@@ -244,18 +275,17 @@ export const updatesService = {
   },
 
   async getToday() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const { data, error } = await supabase
       .from('updates')
-      .select(`
-        *,
-        topic:topics(id, name, status, environment)
-      `)
-      .eq('update_date', today)
-      .order('created_at', { ascending: false });
+      .select('*')
+      .gte('update_date', today.toISOString())
+      .order('update_date', { ascending: false });
 
     if (error) throw error;
-    return data;
+    return data as Update[];
   },
 
   async create(update: Partial<Update>) {
@@ -274,28 +304,22 @@ export const alertsService = {
   async getAll() {
     const { data, error } = await supabase
       .from('alerts')
-      .select(`
-        *,
-        topic:topics(id, name)
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    return data as Alert[];
   },
 
   async getUnresolved() {
     const { data, error } = await supabase
       .from('alerts')
-      .select(`
-        *,
-        topic:topics(id, name)
-      `)
+      .select('*')
       .eq('resolved', false)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    return data as Alert[];
   },
 
   async getByTopicId(topicId: string) {
@@ -476,7 +500,7 @@ export const ingestProjectsService = {
     const { data, error } = await supabase
       .from('ingest_projects')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('updated_at', { ascending: false });
 
     if (error) throw error;
     return data;
@@ -542,5 +566,46 @@ export const ingestProjectsService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async upsertByTitle(project: any) {
+    // Check if project with this title already exists
+    const { data: existing, error: searchError } = await supabase
+      .from('ingest_projects')
+      .select('*')
+      .eq('title', project.title)
+      .maybeSingle();
+
+    if (searchError) throw searchError;
+
+    if (existing) {
+      // Update existing project
+      const { data, error } = await supabase
+        .from('ingest_projects')
+        .update({
+          ...project,
+          id: existing.id, // Keep the same ID
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { data, isNew: false };
+    } else {
+      // Create new project
+      const { data, error } = await supabase
+        .from('ingest_projects')
+        .insert({
+          ...project,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { data, isNew: true };
+    }
   }
 };

@@ -18,6 +18,12 @@ export type Topic = {
   owner_team: string | null;
   naming_valid: boolean;
   naming_issues: string | null;
+  domain: string | null;
+  subdomain: string | null;
+  dataset: string | null;
+  cloud_provider: string | null;
+  cluster_id: string | null;
+  cluster_name: string | null;
   partition_count: number | null;
   replication_factor: number | null;
   retention_ms: number | null;

@@ -16,6 +16,8 @@ export default function TopicsOverview({ onAddTopic, onImportExcel, onKafkaSync,
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [environmentFilter, setEnvironmentFilter] = useState<string>('all');
+  const [cloudFilter, setCloudFilter] = useState<string>('all');
+  const [clusterFilter, setClusterFilter] = useState<string>('all');
 
   useEffect(() => {
     loadTopics();
@@ -25,6 +27,13 @@ export default function TopicsOverview({ onAddTopic, onImportExcel, onKafkaSync,
     try {
       setLoading(true);
       const data = await topicsService.getAll();
+      console.log('Loaded topics count:', data.length);
+      console.log('By environment:', {
+        dev: data.filter(t => t.environment === 'dev').length,
+        sit: data.filter(t => t.environment === 'sit').length,
+        cat: data.filter(t => t.environment === 'cat').length,
+        prod: data.filter(t => t.environment === 'prod').length
+      });
       setTopics(data);
     } catch (error) {
       console.error('Error loading topics:', error);
@@ -38,8 +47,21 @@ export default function TopicsOverview({ onAddTopic, onImportExcel, onKafkaSync,
       topic.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || topic.status === statusFilter;
     const matchesEnvironment = environmentFilter === 'all' || topic.environment === environmentFilter;
-    return matchesSearch && matchesStatus && matchesEnvironment;
+    const matchesCloud = cloudFilter === 'all' || topic.cloud_provider === cloudFilter;
+    const matchesCluster = clusterFilter === 'all' || topic.cluster_name === clusterFilter;
+    return matchesSearch && matchesStatus && matchesEnvironment && matchesCloud && matchesCluster;
   });
+
+  // Get unique clusters for filter
+  const uniqueClusters = Array.from(new Set(topics.map(t => t.cluster_name).filter(Boolean)));
+
+  // Environment counts
+  const envCounts = {
+    dev: topics.filter(t => t.environment === 'dev').length,
+    sit: topics.filter(t => t.environment === 'sit').length,
+    cat: topics.filter(t => t.environment === 'cat').length,
+    prod: topics.filter(t => t.environment === 'prod').length
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -83,6 +105,21 @@ export default function TopicsOverview({ onAddTopic, onImportExcel, onKafkaSync,
     return (
       <span className={`px-2 py-1 rounded text-xs font-medium border ${styles[env as keyof typeof styles]}`}>
         {env.toUpperCase()}
+      </span>
+    );
+  };
+
+  const getCloudBadge = (cloudProvider: string | null, clusterName: string | null) => {
+    if (!cloudProvider) return null;
+    const styles = {
+      Azure: 'bg-blue-100 text-blue-700 border-blue-200',
+      GCP: 'bg-green-100 text-green-700 border-green-200',
+      AWS: 'bg-orange-100 text-orange-700 border-orange-200'
+    };
+    const displayText = clusterName || cloudProvider;
+    return (
+      <span className={`px-2 py-1 rounded text-xs font-medium border ${styles[cloudProvider as keyof typeof styles] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+        {displayText}
       </span>
     );
   };
@@ -150,6 +187,94 @@ export default function TopicsOverview({ onAddTopic, onImportExcel, onKafkaSync,
         ))}
       </div>
 
+      <div className="bg-white rounded-xl border-2 border-slate-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-900">Filter by Environment</h3>
+          <span className="text-xs text-slate-500">{filteredTopics.length} of {topics.length} topics</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setEnvironmentFilter('all')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              environmentFilter === 'all'
+                ? 'bg-slate-700 text-white shadow-md'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            All ({topics.length})
+          </button>
+          <button
+            onClick={() => setEnvironmentFilter('dev')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              environmentFilter === 'dev'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+            }`}
+          >
+            DEV ({envCounts.dev})
+          </button>
+          <button
+            onClick={() => setEnvironmentFilter('sit')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              environmentFilter === 'sit'
+                ? 'bg-amber-600 text-white shadow-md'
+                : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+            }`}
+          >
+            SIT ({envCounts.sit})
+          </button>
+          <button
+            onClick={() => setEnvironmentFilter('cat')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              environmentFilter === 'cat'
+                ? 'bg-orange-600 text-white shadow-md'
+                : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+            }`}
+          >
+            CAT ({envCounts.cat})
+          </button>
+          <button
+            onClick={() => setEnvironmentFilter('prod')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              environmentFilter === 'prod'
+                ? 'bg-red-600 text-white shadow-md'
+                : 'bg-red-100 text-red-700 hover:bg-red-200'
+            }`}
+          >
+            PROD ({envCounts.prod})
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border-2 border-slate-200 p-4">
+        <h3 className="font-semibold text-slate-900 mb-3">Filter by Cluster</h3>
+        <div className="flex items-center flex-wrap gap-2">
+          <button
+            onClick={() => setClusterFilter('all')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              clusterFilter === 'all'
+                ? 'bg-slate-700 text-white shadow-md'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            All Clusters
+          </button>
+          {uniqueClusters.map(cluster => (
+            <button
+              key={cluster}
+              onClick={() => setClusterFilter(cluster)}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                clusterFilter === cluster
+                  ? 'bg-green-600 text-white shadow-md'
+                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+              }`}
+            >
+              {cluster} ({topics.filter(t => t.cluster_name === cluster).length})
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex items-center space-x-4 mb-6">
           <div className="flex-1 relative">
@@ -172,6 +297,16 @@ export default function TopicsOverview({ onAddTopic, onImportExcel, onKafkaSync,
             <option value="sit">SIT</option>
             <option value="cat">CAT</option>
             <option value="prod">PROD</option>
+          </select>
+          <select
+            value={cloudFilter}
+            onChange={(e) => setCloudFilter(e.target.value)}
+            className="px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Clouds</option>
+            <option value="Azure">Azure</option>
+            <option value="GCP">GCP</option>
+            <option value="AWS">AWS</option>
           </select>
         </div>
 
@@ -206,6 +341,7 @@ export default function TopicsOverview({ onAddTopic, onImportExcel, onKafkaSync,
                     <div className="flex items-center space-x-3">
                       {getStatusBadge(topic.status)}
                       {getEnvironmentBadge(topic.environment)}
+                      {getCloudBadge(topic.cloud_provider, topic.cluster_name)}
                       {topic.owner_team && (
                         <span className="text-xs text-slate-500">Team: {topic.owner_team}</span>
                       )}
