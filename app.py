@@ -53,6 +53,8 @@ def sync_kafka_topics():
         admin_url = request_data.get('admin_url', CONFLUENT_ADMIN_URL)
         api_key = request_data.get('api_key', CONFLUENT_API_KEY)
         api_secret = request_data.get('api_secret', CONFLUENT_API_SECRET)
+        schema_registry_key = request_data.get('schema_registry_key', api_key)
+        schema_registry_secret = request_data.get('schema_registry_secret', api_secret)
 
         print(f"Cloud Provider: {cloud_provider}")
         print(f"Cluster ID: {cluster_id}")
@@ -127,6 +129,7 @@ def sync_kafka_topics():
         synced_count = 0
         updated_count = 0
         failed_count = 0
+        schema_synced_count = 0
         errors = []
 
         # Extract environment from cluster_name (e.g., "DEV Azure" -> "dev")
@@ -187,6 +190,37 @@ def sync_kafka_topics():
                 'updated_at': datetime.utcnow().isoformat()
             }
 
+            # Fetch and store schema directly in topic if schema_registry_url provided
+            schema_registry_url = request_data.get('schema_registry_url')
+            if schema_registry_url:
+                try:
+                    schema_subject = f'{topic_name}-value'
+                    schema_url = f'{schema_registry_url}/subjects/{schema_subject}/versions/latest'
+
+                    schema_response = requests.get(
+                        schema_url,
+                        auth=HTTPBasicAuth(api_key, api_secret),
+                        proxies=proxies if proxies else None,
+                        timeout=10
+                    )
+
+                    if schema_response.status_code == 200:
+                        schema_data = schema_response.json()
+                        # Parse schema string to JSON if needed
+                        schema_definition = schema_data.get('schema')
+                        if isinstance(schema_definition, str):
+                            schema_definition = json.loads(schema_definition)
+
+                        topic_data['latest_schema'] = schema_definition
+                        topic_data['schema_version'] = schema_data.get('version')
+                        topic_data['schema_registry_url'] = f'{schema_registry_url}/subjects/{schema_subject}'
+                        topic_data['schema_last_synced'] = datetime.utcnow().isoformat()
+                        schema_synced_count += 1
+                        print(f"   📊 Schema v{schema_data.get('version')} synced for {topic_name}")
+                except Exception as schema_error:
+                    # Don't fail topic sync if schema fetch fails
+                    print(f"   ⚠️ Schema fetch failed for {topic_name}: {str(schema_error)}")
+
             try:
                 if existing.data and len(existing.data) > 0:
                     # Update existing topic
@@ -205,72 +239,12 @@ def sync_kafka_topics():
                 failed_count += 1
                 print(f"❌ ERROR: {error_msg}")
 
-        # After syncing topics, sync schema versions for each topic
-        schema_synced = 0
-        schema_registry_url = request_data.get('schema_registry_url')
-        if schema_registry_url:
-            for topic in topics:
-                topic_name = topic.get('topic_name')
-                if not topic_name:
-                    continue
-
-                try:
-                    # Fetch schema for this topic (value schema)
-                    schema_subject = f'{topic_name}-value'
-                    schema_url = f'{schema_registry_url}/subjects/{schema_subject}/versions'
-
-                    schema_response = requests.get(
-                        schema_url,
-                        auth=HTTPBasicAuth(api_key, api_secret),
-                        proxies=proxies if proxies else None,
-                        timeout=10
-                    )
-
-                    if schema_response.status_code == 200:
-                        versions = schema_response.json()
-
-                        # Get the topic ID from our database
-                        topic_record = supabase.table('topics').select('id').eq('name', topic_name).eq('cluster_id', cluster_id).execute()
-                        if not topic_record.data or len(topic_record.data) == 0:
-                            continue
-
-                        topic_id = topic_record.data[0]['id']
-
-                        # Fetch details for each version
-                        for version_num in versions:
-                            version_url = f'{schema_registry_url}/subjects/{schema_subject}/versions/{version_num}'
-                            version_response = requests.get(
-                                version_url,
-                                auth=HTTPBasicAuth(api_key, api_secret),
-                                proxies=proxies if proxies else None,
-                                timeout=10
-                            )
-
-                            if version_response.status_code == 200:
-                                version_data = version_response.json()
-
-                                # Check if this schema version already exists
-                                existing_schema = supabase.table('schema_versions').select('*').eq('topic_id', topic_id).eq('version', version_num).execute()
-
-                                if not existing_schema.data or len(existing_schema.data) == 0:
-                                    # Insert new schema version
-                                    supabase.table('schema_versions').insert({
-                                        'topic_id': topic_id,
-                                        'version': version_num,
-                                        'schema_definition': version_data.get('schema'),
-                                        'created_at': datetime.utcnow().isoformat()
-                                    }).execute()
-                                    schema_synced += 1
-                except Exception as schema_error:
-                    # Don't fail the whole sync if schema fetch fails
-                    pass
-
         print("\n" + "=" * 80)
         print("SYNC COMPLETED")
         print("=" * 80)
         print(f"✅ New Topics: {synced_count}")
         print(f"🔄 Updated: {updated_count}")
-        print(f"📊 Schemas: {schema_synced}")
+        print(f"📊 Schemas: {schema_synced_count}")
         print(f"❌ Failed: {failed_count}")
         if errors:
             print(f"\n⚠️ Errors ({len(errors)}):")
@@ -286,7 +260,7 @@ def sync_kafka_topics():
                 'synced': synced_count,
                 'updated': updated_count,
                 'failed': failed_count,
-                'schemas_synced': schema_synced,
+                'schemas_synced': schema_synced_count,
                 'errors': errors
             }
         })
