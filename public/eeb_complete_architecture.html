@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>USPS Enterprise Event Broker — EEB Internal Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: true, securityLevel: 'loose', theme: 'default' });
+  </script>
+  <style>
+    body { 
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, Helvetica, sans-serif; 
+      margin: 0; 
+      line-height: 1.4; 
+      background: #f8f9fa;
+    }
+    
+    .slide {
+      min-height: 100vh;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      background: white;
+      border-bottom: 3px solid #1f4e79;
+      page-break-after: always;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #1f4e79 0%, #2d5aa0 100%);
+      color: white;
+      padding: 2rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    
+    .slide-header {
+      background: #1f4e79;
+      color: white;
+      padding: 1rem 2rem;
+      margin: -2rem -2rem 2rem -2rem;
+      font-size: 1.8rem;
+      font-weight: bold;
+    }
+    
+    .usps-logo {
+      position: absolute;
+      bottom: 20px;
+      right: 40px;
+      color: #1f4e79;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+    
+    h1 { margin: 0; font-size: 2.5rem; }
+    h2 { color: #1f4e79; margin-top: 0; font-size: 1.8rem; }
+    h3 { color: #2d5aa0; margin-top: 1.5rem; }
+    
+    .subtitle { margin: 0.5rem 0 0 0; font-size: 1.2rem; opacity: 0.9; }
+    .department { margin: 0.25rem 0 0 0; font-size: 1rem; opacity: 0.8; }
+    
+    .process-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin: 2rem 0;
+    }
+    
+    .process-card {
+      background: #f8f9fa;
+      border: 2px solid #dee2e6;
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .process-card h4 {
+      color: #1f4e79;
+      margin: 0 0 1rem 0;
+      font-size: 1.2rem;
+      border-bottom: 2px solid #2d5aa0;
+      padding-bottom: 0.5rem;
+    }
+    
+    .highlight-box {
+      background: #e3f2fd;
+      border: 2px solid #1976d2;
+      border-left: 6px solid #1976d2;
+      padding: 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    
+    .success-box {
+      background: #e8f5e8;
+      border: 2px solid #28a745;
+      border-left: 6px solid #28a745;
+      padding: 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    
+    .warning-box {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-left: 6px solid #ffc107;
+      padding: 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    
+    .mermaid { 
+      border: 2px solid #e1e4e8; 
+      border-radius: 8px; 
+      padding: 1rem; 
+      background: #fff; 
+      margin: 1.5rem 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .team-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .team-table th {
+      background: #1f4e79;
+      color: white;
+      padding: 1rem;
+      text-align: left;
+      font-weight: bold;
+    }
+    
+    .team-table td {
+      padding: 0.8rem 1rem;
+      border-bottom: 1px solid #dee2e6;
+    }
+    
+    .team-table tr:nth-child(even) {
+      background: #f8f9fa;
+    }
+    
+    code { 
+      background: #f1f3f4; 
+      padding: 0.2rem 0.4rem; 
+      border-radius: 3px; 
+      font-family: 'Courier New', monospace;
+    }
+    
+    .flow-step {
+      background: #2d5aa0;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      display: inline-block;
+      margin: 0.25rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Slide 1: Title -->
+<div class="slide">
+  <div class="header">
+    <h1>USPS Enterprise Event Broker</h1>
+    <p class="subtitle">EEB Internal Architecture & Process Flow</p>
+    <p class="department">CDAO Data Engineering Team — Architecture Cookbook</p>
+  </div>
+  
+  <div class="highlight-box">
+    <h3>🎯 Purpose</h3>
+    <p><strong>Enterprise Event Broker (EEB)</strong> provides standardized, secure, and scalable event streaming capabilities for USPS data integration, transformation, and distribution.</p>
+  </div>
+  
+  <div class="process-grid">
+    <div class="process-card">
+      <h4>🔄 Consumer-Driven Process</h4>
+      <ul>
+        <li>Consumer requests drive all EEB implementations</li>
+        <li>Data standardization and normalization</li>
+        <li>Two-topic pattern: Raw → Processed</li>
+        <li>Collaborative team approach</li>
+      </ul>
+    </div>
+    
+    <div class="process-card">
+      <h4>🏗️ Key Technologies</h4>
+      <ul>
+        <li>Apache Kafka for event streaming</li>
+        <li>Avro Schema Registry for governance</li>
+        <li>Azure/GCP multi-cloud integration</li>
+        <li>Interface Control Documents (ICDs)</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 2: Process Flow -->
+<div class="slide">
+  <div class="slide-header">EEB Implementation Process Flow</div>
+  
+  <div class="mermaid">
+graph TB
+    subgraph "CONSUMER / REQUESTING UNIT"
+        A1[Consumer Data Request]
+        A2[Define Data Requirements]
+        A3[Final Data Acceptance]
+    end
+    
+    subgraph "DATA INTAKE & MODELING TEAM + DATA SCIENTISTS"
+        B1[Data Intake Assessment]
+        B2[Data Modeling & Standardization]
+        B3[Data Science Analysis & Validation]
+        B4[Define Schema Requirements]
+        B5[ICD Review & Approval Process]
+    end
+    
+    subgraph "EEB TEAM + DEVELOPMENT TEAM"
+        C1[EEB Architecture Analysis]
+        C2[Create ICD Documentation]
+        C3[Development Architecture Design]
+        C4[Build Data Ingest Services]
+        C5[Create Kafka Topics & Schemas]
+        C6[Develop Producer/Consumer Code]
+    end
+    
+    subgraph "TESTING & DEPLOYMENT PIPELINE"
+        D1[DEV Environment Testing]
+        D2[SIT Environment Testing]
+        D3[CAT Environment Testing]
+        D4[PROD Deployment & Monitoring]
+    end
+    
+    %% Main Process Flow
+    A1 --> A2
+    A2 --> B1
+    B1 --> B2
+    B2 --> B3
+    B3 --> B4
+    B4 --> C1
+    C1 --> C2
+    C2 --> C3
+    
+    %% ICD Approval Back and Forth
+    C2 -.->|ICD Draft for Review| B5
+    B5 -.->|Feedback & Changes| C2
+    C2 -.->|ICD Review| A2
+    A2 -.->|Customer Feedback| C2
+    B5 -->|Final ICD Approval| C4
+    
+    %% Development Flow
+    C3 --> C4
+    C4 --> C5
+    C5 --> C6
+    C6 --> D1
+    D1 --> D2
+    D2 --> D3
+    D3 --> D4
+    D4 --> A3
+    
+    classDef consumer fill:#1f4e79,stroke:#fff,color:#fff,stroke-width:2px
+    classDef modeling fill:#d9534f,stroke:#fff,color:#fff,stroke-width:2px
+    classDef eeb_dev fill:#5cb85c,stroke:#fff,color:#fff,stroke-width:2px
+    classDef testing fill:#f0ad4e,stroke:#fff,color:#fff,stroke-width:2px
+    
+    class A1,A2,A3 consumer
+    class B1,B2,B3,B4,B5 modeling
+    class C1,C2,C3,C4,C5,C6 eeb_dev
+    class D1,D2,D3,D4 testing
+  </div>
+  
+  <div class="highlight-box">
+    <h3>🔄 Key Process Steps</h3>
+    <span class="flow-step">1. Consumer Request</span>
+    <span class="flow-step">2. Data Intake & Modeling</span>
+    <span class="flow-step">3. ICD Creation & Review</span>
+    <span class="flow-step">4. Development & Testing</span>
+    <span class="flow-step">5. Production Deployment</span>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 3: Data Transformation Architecture -->
+<div class="slide">
+  <div class="slide-header">EEB Data Transformation Architecture</div>
+  
+  <div class="mermaid">
+graph LR
+    subgraph "Data Input"
+        SOURCE[Consumer Raw Data<br/>• Various Formats<br/>• Inconsistent Structure<br/>• Multiple Sources]
+        INBOUND[Inbound Kafka Topic<br/>• Raw Data Storage<br/>• Temporary Retention<br/>• Original Format]
+    end
+    
+    subgraph "EEB Processing Engine"
+        INGEST[EEB Ingest Service<br/>• Data Validation<br/>• Error Handling<br/>• Quality Checks]
+        TRANSFORM[Data Transformation<br/>• Standardization<br/>• Normalization<br/>• Business Rules]
+        VALIDATE[Final Validation<br/>• Schema Compliance<br/>• Data Quality<br/>• Completeness Check]
+    end
+    
+    subgraph "Data Output"
+        OUTBOUND[Outbound Kafka Topic<br/>• Processed Data<br/>• Standard Schema<br/>• Consumer Ready]
+        CONSUMER[Consumer Applications<br/>• Clean Data Access<br/>• Consistent Format<br/>• Reliable Delivery]
+    end
+    
+    SOURCE --> INBOUND
+    INBOUND --> INGEST
+    INGEST --> TRANSFORM
+    TRANSFORM --> VALIDATE
+    VALIDATE --> OUTBOUND
+    OUTBOUND --> CONSUMER
+    
+    classDef input fill:#dc3545,stroke:#fff,color:#fff,stroke-width:2px
+    classDef process fill:#17a2b8,stroke:#fff,color:#fff,stroke-width:2px
+    classDef output fill:#28a745,stroke:#fff,color:#fff,stroke-width:2px
+    
+    class SOURCE,INBOUND input
+    class INGEST,TRANSFORM,VALIDATE process
+    class OUTBOUND,CONSUMER output
+  </div>
+  
+  <div class="process-grid">
+    <div class="process-card">
+      <h4>📥 Inbound Processing</h4>
+      <ul>
+        <li><strong>Raw Data Ingestion</strong>: Accept data in original format</li>
+        <li><strong>Initial Validation</strong>: Basic structure and completeness checks</li>
+        <li><strong>Error Handling</strong>: Route malformed data to error queues</li>
+        <li><strong>Temporary Storage</strong>: Short-term retention for processing</li>
+      </ul>
+    </div>
+    
+    <div class="process-card">
+      <h4>📤 Outbound Delivery</h4>
+      <ul>
+        <li><strong>Standardized Format</strong>: Consistent schema across all consumers</li>
+        <li><strong>Quality Assured</strong>: Data validated and cleansed</li>
+        <li><strong>Business Ready</strong>: Enriched with business context</li>
+        <li><strong>Consumer Accessible</strong>: Easy integration for applications</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 4: Team Collaboration Model -->
+<div class="slide">
+  <div class="slide-header">EEB Team Collaboration Model</div>
+  
+  <div class="mermaid">
+graph TB
+    subgraph "CONSUMER ORGANIZATION"
+        CONSUMER[Data Consumer<br/>Business Unit]
+        REQ[Data Request<br/>Requirements Definition]
+    end
+    
+    subgraph "DATA INTAKE & MODELING + DATA SCIENTISTS"
+        INTAKE[Data Intake Assessment]
+        MODEL[Data Modeling & Standardization]
+        SCIENCE[Data Science Analysis]
+        SCHEMA[Schema Requirements]
+        APPROVE[ICD Approval Authority]
+    end
+    
+    subgraph "EEB + DEVELOPMENT TEAMS"
+        EEB_ARCH[EEB Architecture Design]
+        ICD_CREATE[ICD Creation & Documentation]
+        DEV_DESIGN[Development Design]
+        BUILD_SERVICE[Build Ingest Services]
+        CODE_DEV[Code Development]
+    end
+    
+    subgraph "DEPLOYMENT PIPELINE"
+        DEV_ENV[DEV Testing]
+        SIT_ENV[SIT Integration]
+        CAT_ENV[CAT Validation]
+        PROD[PROD Deployment]
+    end
+    
+    %% Main Flow
+    CONSUMER --> REQ
+    REQ --> INTAKE
+    INTAKE --> MODEL
+    MODEL --> SCIENCE
+    SCIENCE --> SCHEMA
+    SCHEMA --> EEB_ARCH
+    EEB_ARCH --> ICD_CREATE
+    ICD_CREATE --> DEV_DESIGN
+    
+    %% ICD Review Loop
+    ICD_CREATE -.->|ICD Review| APPROVE
+    APPROVE -.->|Feedback| ICD_CREATE
+    APPROVE -->|Final Approval| BUILD_SERVICE
+    
+    %% Development Flow
+    DEV_DESIGN --> BUILD_SERVICE
+    BUILD_SERVICE --> CODE_DEV
+    CODE_DEV --> DEV_ENV
+    DEV_ENV --> SIT_ENV
+    SIT_ENV --> CAT_ENV
+    CAT_ENV --> PROD
+    PROD --> CONSUMER
+    
+    classDef consumer fill:#1f4e79,stroke:#fff,color:#fff,stroke-width:2px
+    classDef modeling fill:#d9534f,stroke:#fff,color:#fff,stroke-width:2px
+    classDef eeb fill:#5cb85c,stroke:#fff,color:#fff,stroke-width:2px
+    classDef deployment fill:#f0ad4e,stroke:#fff,color:#fff,stroke-width:2px
+    
+    class CONSUMER,REQ consumer
+    class INTAKE,MODEL,SCIENCE,SCHEMA,APPROVE modeling
+    class EEB_ARCH,ICD_CREATE,DEV_DESIGN,BUILD_SERVICE,CODE_DEV eeb
+    class DEV_ENV,SIT_ENV,CAT_ENV,PROD deployment
+  </div>
+  
+  <table class="team-table">
+    <thead>
+      <tr>
+        <th>Team</th>
+        <th>Primary Responsibilities</th>
+        <th>Key Deliverables</th>
+        <th>Collaboration Points</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Consumer/Requesting Unit</strong></td>
+        <td>Define data requirements, acceptance testing</td>
+        <td>Requirements document, final acceptance</td>
+        <td>Initial request, final validation</td>
+      </tr>
+      <tr>
+        <td><strong>Data Intake & Modeling + Data Scientists</strong></td>
+        <td>Data assessment, modeling, standardization, ICD approval</td>
+        <td>Data models, schema requirements, ICD approval</td>
+        <td>Continuous collaboration with EEB team</td>
+      </tr>
+      <tr>
+        <td><strong>EEB + Development Teams</strong></td>
+        <td>ICD creation, architecture design, code development</td>
+        <td>ICDs, ingest services, topics, schemas, code</td>
+        <td>Joint architecture and development work</td>
+      </tr>
+      <tr>
+        <td><strong>Testing & Deployment</strong></td>
+        <td>Environment management, testing validation</td>
+        <td>Successful deployments across environments</td>
+        <td>Quality assurance and production readiness</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 5: Interface Control Documents (ICDs) -->
+<div class="slide">
+  <div class="slide-header">Interface Control Documents (ICDs) - Collaborative Creation</div>
+  
+  <div class="mermaid">
+sequenceDiagram
+    participant Consumer as Consumer Unit
+    participant Modeling as Data Intake & Modeling + Data Scientists
+    participant EEB as EEB + Development Teams
+    participant Approval as ICD Approval Process
+    
+    Consumer->>Modeling: Submit data request & requirements
+    Modeling->>Modeling: Assess intake requirements
+    Modeling->>Modeling: Data modeling & standardization
+    Modeling->>EEB: Assign for ICD creation
+    
+    EEB->>EEB: Analyze technical requirements
+    EEB->>EEB: Design EEB architecture
+    EEB->>EEB: Create ICD documentation
+    EEB->>Modeling: Submit ICD for review
+    
+    Modeling->>Modeling: Review ICD against requirements
+    alt ICD Approved
+        Modeling->>Approval: ICD meets all requirements
+        Approval-->>EEB: Final approval granted
+        EEB->>EEB: Begin development work
+    else ICD Needs Changes
+        Modeling->>EEB: Request ICD modifications
+        EEB->>EEB: Update ICD documentation
+        EEB->>Modeling: Resubmit updated ICD
+    end
+    
+    EEB->>Consumer: Data available in outbound topic
+  </div>
+  
+  <div class="process-grid">
+    <div class="process-card">
+      <h4>📋 ICD Inbound Specifications</h4>
+      <ul>
+        <li><strong>Data Source</strong>: Consumer system details and format</li>
+        <li><strong>Schema Definition</strong>: Raw data structure and validation</li>
+        <li><strong>Delivery Method</strong>: How data arrives at EEB</li>
+        <li><strong>Quality Requirements</strong>: Completeness and accuracy standards</li>
+      </ul>
+    </div>
+    
+    <div class="process-card">
+      <h4>📋 ICD Outbound Specifications</h4>
+      <ul>
+        <li><strong>Processed Schema</strong>: Standardized output format</li>
+        <li><strong>Transformation Rules</strong>: Business logic applied</li>
+        <li><strong>Access Method</strong>: How consumers access processed data</li>
+        <li><strong>SLA Requirements</strong>: Performance and availability guarantees</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 6: Technical Architecture -->
+<div class="slide">
+  <div class="slide-header">EEB Technical Architecture - Two-Topic Pattern</div>
+  
+  <div class="mermaid">
+graph TB
+    subgraph "Consumer Data Sources"
+        SYSTEMS[Consumer Systems<br/>• Business Applications<br/>• Legacy Systems<br/>• External APIs]
+    end
+    
+    subgraph "EEB Kafka Infrastructure"
+        INBOUND_TOPIC[Inbound Topics<br/>• Raw Data Storage<br/>• Original Format<br/>• Temporary Retention]
+        
+        EEB_SERVICES[EEB Processing Services<br/>• Data Transformation<br/>• Standardization<br/>• Quality Validation<br/>• Business Rule Application]
+        
+        OUTBOUND_TOPIC[Outbound Topics<br/>• Processed Data<br/>• Standard Schema<br/>• Consumer Ready<br/>• Long-term Retention]
+    end
+    
+    subgraph "Consumer Applications"
+        CONSUMERS[Data Consumers<br/>• Business Intelligence<br/>• Analytics Applications<br/>• Reporting Systems<br/>• Downstream Services]
+    end
+    
+    subgraph "Support Infrastructure"
+        SCHEMA_REG[Schema Registry<br/>• Avro Schemas<br/>• Version Management]
+        MONITORING[Monitoring & Alerting<br/>• Performance Metrics<br/>• Error Tracking]
+        DLQ[Dead Letter Queues<br/>• Error Handling<br/>• Manual Review]
+    end
+    
+    %% Data Flow
+    SYSTEMS --> INBOUND_TOPIC
+    INBOUND_TOPIC --> EEB_SERVICES
+    EEB_SERVICES --> OUTBOUND_TOPIC
+    OUTBOUND_TOPIC --> CONSUMERS
+    
+    %% Support Connections
+    SCHEMA_REG <--> INBOUND_TOPIC
+    SCHEMA_REG <--> OUTBOUND_TOPIC
+    EEB_SERVICES --> MONITORING
+    EEB_SERVICES -.-> DLQ
+    
+    classDef source fill:#1f4e79,stroke:#fff,color:#fff,stroke-width:2px
+    classDef inbound fill:#dc3545,stroke:#fff,color:#fff,stroke-width:2px
+    classDef processing fill:#17a2b8,stroke:#fff,color:#fff,stroke-width:2px
+    classDef outbound fill:#28a745,stroke:#fff,color:#fff,stroke-width:2px
+    classDef consumer fill:#6f42c1,stroke:#fff,color:#fff,stroke-width:2px
+    classDef support fill:#6c757d,stroke:#fff,color:#fff,stroke-width:2px
+    
+    class SYSTEMS source
+    class INBOUND_TOPIC inbound
+    class EEB_SERVICES processing
+    class OUTBOUND_TOPIC outbound
+    class CONSUMERS consumer
+    class SCHEMA_REG,MONITORING,DLQ support
+  </div>
+  
+  <div class="success-box">
+    <h3>✅ Value Proposition</h3>
+    <p><strong>Raw Data In → Standardized Data Out</strong>: EEB transforms inconsistent consumer data into clean, standardized, business-ready data that can be easily consumed by multiple applications.</p>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 7: Implementation Details -->
+<div class="slide">
+  <div class="slide-header">Implementation Standards & Best Practices</div>
+  
+  <div class="process-grid">
+    <div class="process-card">
+      <h4>🔧 Topic Naming Convention</h4>
+      <p><strong>Inbound Topics:</strong></p>
+      <code>inbound.{business-domain}.{data-type}</code>
+      <p>Example: <code>inbound.retail.transactions</code></p>
+      
+      <p><strong>Outbound Topics:</strong></p>
+      <code>outbound.{business-domain}.{data-type}</code>
+      <p>Example: <code>outbound.retail.transactions</code></p>
+    </div>
+    
+    <div class="process-card">
+      <h4>📊 Schema Management</h4>
+      <ul>
+        <li><strong>Avro Format</strong>: All schemas use Avro for evolution support</li>
+        <li><strong>Version Control</strong>: Semantic versioning (v1.0.0, v1.1.0)</li>
+        <li><strong>Compatibility</strong>: Backward compatibility enforced</li>
+        <li><strong>Documentation</strong>: Schema annotations for business context</li>
+      </ul>
+    </div>
+    
+    <div class="process-card">
+      <h4>🚦 Environment Progression</h4>
+      <ul>
+        <li><strong>DEV</strong>: Development testing and debugging</li>
+        <li><strong>SIT</strong>: System integration testing</li>
+        <li><strong>CAT</strong>: Customer acceptance testing</li>
+        <li><strong>PROD</strong>: Production deployment with monitoring</li>
+      </ul>
+    </div>
+    
+    <div class="process-card">
+      <h4>📋 Quality Standards</h4>
+      <ul>
+        <li><strong>Data Validation</strong>: Schema compliance and business rules</li>
+        <li><strong>Error Handling</strong>: Comprehensive DLQ processing</li>
+        <li><strong>Monitoring</strong>: Real-time metrics and alerting</li>
+        <li><strong>Documentation</strong>: Complete ICD and technical docs</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="highlight-box">
+    <h3>🎯 Success Metrics</h3>
+    <ul>
+      <li><strong>Data Quality</strong>: 99.9% schema compliance rate</li>
+      <li><strong>Processing Latency</strong>: < 5 seconds for standard transformations</li>
+      <li><strong>Availability</strong>: 99.9% uptime for critical data flows</li>
+      <li><strong>Consumer Satisfaction</strong>: Simplified integration for downstream applications</li>
+    </ul>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 8: Monitoring & Operations -->
+<div class="slide">
+  <div class="slide-header">EEB Monitoring & Observability</div>
+  
+  <div class="mermaid">
+graph TB
+    subgraph "Data Flow Monitoring"
+        INBOUND_METRICS[Inbound Topic Metrics<br/>• Message Volume<br/>• Data Quality<br/>• Error Rates]
+        PROCESS_METRICS[Processing Metrics<br/>• Transformation Time<br/>• Success/Failure Rates<br/>• Resource Usage]
+        OUTBOUND_METRICS[Outbound Topic Metrics<br/>• Consumer Lag<br/>• Delivery Success<br/>• Schema Compliance]
+    end
+    
+    subgraph "Operational Monitoring"
+        KAFKA_HEALTH[Kafka Cluster Health<br/>• Broker Status<br/>• Partition Balance<br/>• Replication Status]
+        SCHEMA_MONITOR[Schema Registry Monitoring<br/>• Schema Versions<br/>• Compatibility Issues<br/>• Usage Statistics]
+        DLQ_MONITOR[DLQ Monitoring<br/>• Error Classification<br/>• Resolution Time<br/>• Trend Analysis]
+    end
+    
+    subgraph "Alerting & Response"
+        ALERTS[Automated Alerting<br/>• Threshold Breaches<br/>• Error Spikes<br/>• Performance Issues]
+        ONCALL[On-Call Response<br/>• 24/7 Support<br/>• Incident Management<br/>• Escalation Procedures]
+        DASHBOARDS[Operational Dashboards<br/>• Real-time Status<br/>• Historical Trends<br/>• Performance KPIs]
+    end
+    
+    INBOUND_METRICS --> ALERTS
+    PROCESS_METRICS --> ALERTS
+    OUTBOUND_METRICS --> ALERTS
+    KAFKA_HEALTH --> DASHBOARDS
+    SCHEMA_MONITOR --> DASHBOARDS
+    DLQ_MONITOR --> ONCALL
+    ALERTS --> ONCALL
+    
+    classDef monitoring fill:#17a2b8,stroke:#fff,color:#fff,stroke-width:2px
+    classDef operational fill:#6c757d,stroke:#fff,color:#fff,stroke-width:2px
+    classDef alerting fill:#dc3545,stroke:#fff,color:#fff,stroke-width:2px
+    
+    class INBOUND_METRICS,PROCESS_METRICS,OUTBOUND_METRICS monitoring
+    class KAFKA_HEALTH,SCHEMA_MONITOR,DLQ_MONITOR operational
+    class ALERTS,ONCALL,DASHBOARDS alerting
+  </div>
+  
+  <div class="warning-box">
+    <h3>⚠️ Critical Monitoring Points</h3>
+    <ul>
+      <li><strong>Consumer Lag</strong>: Outbound topic consumer lag > 1000 messages</li>
+      <li><strong>Processing Errors</strong>: > 5% failure rate in transformations</li>
+      <li><strong>DLQ Buildup</strong>: > 100 messages in any DLQ</li>
+      <li><strong>Schema Issues</strong>: Any schema compatibility failures</li>
+    </ul>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 9: Security & Compliance -->
+<div class="slide">
+  <div class="slide-header">Security & Compliance Framework</div>
+  
+  <div class="mermaid">
+graph TB
+    subgraph AccessControl ["Access Control"]
+        CONSUMER_AUTH[Consumer Authentication<br/>Service Accounts<br/>Certificate-based<br/>OAuth Integration]
+        TOPIC_PERMS[Topic Permissions<br/>Read/Write ACLs<br/>Consumer Group Access<br/>Admin Permissions]
+    end
+    
+    subgraph DataProtection ["Data Protection"]
+        ENCRYPTION[Data Encryption<br/>In-Transit TLS<br/>At-Rest AES-256<br/>Key Management]
+        PII_HANDLING[PII Protection<br/>Auto-Classification<br/>Masking Rules<br/>Access Restrictions]
+    end
+    
+    subgraph ComplianceAudit ["Compliance & Audit"]
+        AUDIT_LOG[Audit Logging<br/>All Access Events<br/>Data Lineage<br/>Compliance Reports]
+        RETENTION[Data Retention<br/>Policy Enforcement<br/>Automated Cleanup<br/>Legal Hold Support]
+    end
+    
+    CONSUMER_AUTH --> TOPIC_PERMS
+    TOPIC_PERMS --> ENCRYPTION
+    ENCRYPTION --> PII_HANDLING
+    PII_HANDLING --> AUDIT_LOG
+    AUDIT_LOG --> RETENTION
+    
+    classDef access fill:#d9534f,stroke:#fff,color:#fff,stroke-width:2px
+    classDef protection fill:#6f42c1,stroke:#fff,color:#fff,stroke-width:2px
+    classDef compliance fill:#17a2b8,stroke:#fff,color:#fff,stroke-width:2px
+    
+    class CONSUMER_AUTH,TOPIC_PERMS access
+    class ENCRYPTION,PII_HANDLING protection
+    class AUDIT_LOG,RETENTION compliance
+  </div>
+  
+  <div class="process-grid">
+    <div class="process-card">
+      <h4>🛡️ Security Standards</h4>
+      <ul>
+        <li><strong>mTLS Required</strong>: All producer/consumer connections</li>
+        <li><strong>Certificate Rotation</strong>: 90-day automatic renewal</li>
+        <li><strong>Network Isolation</strong>: VPN-only access to Kafka clusters</li>
+        <li><strong>Principle of Least Privilege</strong>: Minimal required permissions</li>
+      </ul>
+    </div>
+    
+    <div class="process-card">
+      <h4>📊 Compliance Requirements</h4>
+      <ul>
+        <li><strong>Federal Records</strong>: 7-year retention for audit data</li>
+        <li><strong>PII Protection</strong>: Automatic detection and masking</li>
+        <li><strong>Access Auditing</strong>: Complete trail of all data access</li>
+        <li><strong>Data Classification</strong>: Public/Internal/Confidential tagging</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<!-- Slide 10: Next Steps -->
+<div class="slide">
+  <div class="slide-header">Implementation Roadmap & Next Steps</div>
+  
+  <div class="highlight-box">
+    <h3>🚀 Getting Started with EEB</h3>
+    <p>To begin an EEB integration, consumers should contact <strong>Penny's Data Intake & Modeling team</strong> with their data requirements and business use case.</p>
+  </div>
+  
+  <div class="process-grid">
+    <div class="process-card">
+      <h4>📝 Required Information</h4>
+      <ul>
+        <li><strong>Business Use Case</strong>: What problem are you solving?</li>
+        <li><strong>Data Source</strong>: Where is the data coming from?</li>
+        <li><strong>Data Volume</strong>: Expected message rates and sizes</li>
+        <li><strong>Consumer Systems</strong>: Who will consume the processed data?</li>
+        <li><strong>SLA Requirements</strong>: Latency and availability needs</li>
+      </ul>
+    </div>
+    
+    <div class="process-card">
+      <h4>⏱️ Typical Timeline</h4>
+      <ul>
+        <li><strong>Week 1-2</strong>: Data intake assessment and modeling</li>
+        <li><strong>Week 3-4</strong>: ICD creation and approval process</li>
+        <li><strong>Week 5-8</strong>: Development and testing</li>
+        <li><strong>Week 9-10</strong>: Production deployment and validation</li>
+        <li><strong>Ongoing</strong>: Monitoring and operational support</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="success-box">
+    <h3>✅ Expected Outcomes</h3>
+    <ul>
+      <li><strong>Standardized Data</strong>: Clean, consistent data format for all consumers</li>
+      <li><strong>Reduced Integration Effort</strong>: Simplified access to processed data</li>
+      <li><strong>Improved Data Quality</strong>: Validation and cleansing built into the pipeline</li>
+      <li><strong>Scalable Architecture</strong>: Handle growing data volumes efficiently</li>
+      <li><strong>Operational Excellence</strong>: 24/7 monitoring and support</li>
+    </ul>
+  </div>
+  
+  <div class="highlight-box">
+    <h3>📞 Contact Information</h3>
+    <p><strong>Data Intake & Modeling Team (Penny's Team)</strong>: Pentelope.R.Mondani2@usps.gov-[(202) 251-5583]</p>
+    <p><strong>EEB Team</strong>: Peermohamed.Kajakamaludeen@usps.gov-[(919) 501-9608]</p>
+    <p><strong>Emergency Support</strong>: Sivakami.Subramani2@usps.gov-[(972) 523-1148]</p>
+  </div>
+  
+  <div class="usps-logo">UNITED STATES POSTAL SERVICE</div>
+</div>
+
+<footer style="text-align: center; padding: 2rem; background: #1f4e79; color: white; margin-top: 2rem;">
+  <p><strong>USPS Enterprise Event Broker Architecture</strong></p>
+  <p>CDAO Data Engineering Team | Architecture Cookbook | Version 2.0</p>
+  <p><em>Consumer-Driven Data Standardization & Distribution Platform</em></p>
+</footer>
+
+</body>
+</html>
