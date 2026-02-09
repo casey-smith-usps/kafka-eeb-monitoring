@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EEB Architecture Diagrams</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: true, securityLevel: 'loose', theme: 'default' });
+  </script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, Helvetica, sans-serif;
+      margin: 0;
+      padding: 2rem;
+      line-height: 1.6;
+      background: white;
+    }
+
+    .diagram-section {
+      margin-bottom: 3rem;
+      padding-bottom: 3rem;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .diagram-section:last-child {
+      border-bottom: none;
+    }
+
+    h2 {
+      color: #1f4e79;
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      font-size: 1.8rem;
+      font-weight: 600;
+    }
+
+    h3 {
+      color: #2d5aa0;
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+    }
+
+    .mermaid {
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 1.5rem 0;
+    }
+
+    .info-box {
+      background: #f0f9ff;
+      border-left: 4px solid #3b82f6;
+      padding: 1rem 1.5rem;
+      border-radius: 4px;
+      margin: 1.5rem 0;
+    }
+
+    .info-box h4 {
+      margin: 0 0 0.5rem 0;
+      color: #1e40af;
+      font-size: 1.1rem;
+    }
+
+    .info-box p {
+      margin: 0.5rem 0;
+      color: #1e3a8a;
+    }
+
+    .flow-steps {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin: 1rem 0;
+    }
+
+    .flow-step {
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Process Flow Diagram -->
+<div class="diagram-section">
+  <h2>EEB Implementation Process Flow</h2>
+
+  <div class="mermaid">
+graph TB
+    subgraph "CONSUMER / REQUESTING UNIT"
+        A1[Consumer Data Request]
+        A2[Define Data Requirements]
+        A3[Final Data Acceptance]
+    end
+
+    subgraph "DATA INTAKE & MODELING TEAM + DATA SCIENTISTS"
+        B1[Data Intake Assessment]
+        B2[Data Modeling & Standardization]
+        B3[Data Science Analysis & Validation]
+        B4[Define Schema Requirements]
+        B5[ICD Review & Approval Process]
+    end
+
+    subgraph "EEB TEAM + DEVELOPMENT TEAM"
+        C1[EEB Architecture Analysis]
+        C2[Create ICD Documentation]
+        C3[Development Architecture Design]
+        C4[Build Data Ingest Services]
+        C5[Create Kafka Topics & Schemas]
+        C6[Develop Producer/Consumer Code]
+    end
+
+    subgraph "TESTING & DEPLOYMENT PIPELINE"
+        D1[DEV Environment Testing]
+        D2[SIT Environment Testing]
+        D3[CAT Environment Testing]
+        D4[PROD Deployment & Monitoring]
+    end
+
+    A1 --> A2
+    A2 --> B1
+    B1 --> B2
+    B2 --> B3
+    B3 --> B4
+    B4 --> C1
+    C1 --> C2
+    C2 --> C3
+
+    C2 -.->|ICD Draft for Review| B5
+    B5 -.->|Feedback & Changes| C2
+    C2 -.->|ICD Review| A2
+    A2 -.->|Customer Feedback| C2
+    B5 -->|Final ICD Approval| C4
+
+    C3 --> C4
+    C4 --> C5
+    C5 --> C6
+    C6 --> D1
+    D1 --> D2
+    D2 --> D3
+    D3 --> D4
+    D4 --> A3
+
+    classDef consumer fill:#1f4e79,stroke:#fff,color:#fff,stroke-width:2px
+    classDef modeling fill:#d9534f,stroke:#fff,color:#fff,stroke-width:2px
+    classDef eeb_dev fill:#5cb85c,stroke:#fff,color:#fff,stroke-width:2px
+    classDef testing fill:#f0ad4e,stroke:#fff,color:#fff,stroke-width:2px
+
+    class A1,A2,A3 consumer
+    class B1,B2,B3,B4,B5 modeling
+    class C1,C2,C3,C4,C5,C6 eeb_dev
+    class D1,D2,D3,D4 testing
+  </div>
+
+  <div class="info-box">
+    <h4>Key Process Steps</h4>
+    <div class="flow-steps">
+      <span class="flow-step">1. Consumer Request</span>
+      <span class="flow-step">2. Data Intake & Modeling</span>
+      <span class="flow-step">3. ICD Creation & Review</span>
+      <span class="flow-step">4. Development & Testing</span>
+      <span class="flow-step">5. Production Deployment</span>
+    </div>
+  </div>
+</div>
+
+<!-- Data Transformation Architecture -->
+<div class="diagram-section">
+  <h2>EEB Data Transformation Architecture</h2>
+
+  <div class="mermaid">
+graph LR
+    subgraph "Data Input"
+        SOURCE[Consumer Raw Data<br/>• Various Formats<br/>• Inconsistent Structure<br/>• Multiple Sources]
+    end
+
+    subgraph "EEB Data Processing Pipeline"
+        INTAKE[Data Intake Layer<br/>• Parse & Validate<br/>• Quality Checks]
+        TRANSFORM[Transformation Layer<br/>• Data Cleaning<br/>• Format Standardization<br/>• Enrichment]
+        SCHEMA[Schema Management<br/>• Avro Schema Registry<br/>• Version Control<br/>• Data Contracts]
+    end
+
+    subgraph "Kafka Infrastructure"
+        PRODUCER[Producer Services<br/>• Message Publishing<br/>• Partitioning Logic]
+        TOPICS[Kafka Topics<br/>• DEV/SIT/CAT/PROD<br/>• Multi-Environment]
+        CONSUMER[Consumer Services<br/>• Downstream Applications<br/>• Data Subscribers]
+    end
+
+    subgraph "Output & Monitoring"
+        OUTPUT[Standardized Data Output<br/>• Consistent Schema<br/>• Quality Assured<br/>• Real-time Stream]
+        MONITOR[Monitoring & Alerts<br/>• Data Quality Metrics<br/>• Performance Tracking<br/>• Error Detection]
+    end
+
+    SOURCE --> INTAKE
+    INTAKE --> TRANSFORM
+    TRANSFORM --> SCHEMA
+    SCHEMA --> PRODUCER
+    PRODUCER --> TOPICS
+    TOPICS --> CONSUMER
+    CONSUMER --> OUTPUT
+    OUTPUT --> MONITOR
+
+    classDef input fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef processing fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef kafka fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef output fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+
+    class SOURCE input
+    class INTAKE,TRANSFORM,SCHEMA processing
+    class PRODUCER,TOPICS,CONSUMER kafka
+    class OUTPUT,MONITOR output
+  </div>
+</div>
+
+<!-- Kafka Architecture -->
+<div class="diagram-section">
+  <h2>Kafka Topic Architecture</h2>
+
+  <div class="mermaid">
+graph TB
+    subgraph "Topic Creation & Management"
+        DESIGN[Topic Design<br/>• Naming Convention<br/>• Partitioning Strategy<br/>• Retention Policy]
+        SCHEMA_REG[Schema Registry<br/>• Avro Schema Definition<br/>• Version Management<br/>• Backward Compatibility]
+        CREATE[Topic Creation<br/>• DEV → SIT → CAT → PROD<br/>• Configuration Management]
+    end
+
+    subgraph "Producer Layer"
+        PROD_APP[Producer Applications<br/>• Data Validation<br/>• Serialization<br/>• Error Handling]
+        PROD_CONFIG[Producer Configuration<br/>• Acks & Retries<br/>• Compression<br/>• Batching]
+    end
+
+    subgraph "Kafka Cluster"
+        BROKER[Kafka Brokers<br/>• Message Storage<br/>• Replication<br/>• Load Balancing]
+        PARTITION[Topic Partitions<br/>• Data Distribution<br/>• Parallel Processing<br/>• Ordered Messages]
+    end
+
+    subgraph "Consumer Layer"
+        CONS_GROUP[Consumer Groups<br/>• Load Distribution<br/>• Fault Tolerance<br/>• Offset Management]
+        CONS_APP[Consumer Applications<br/>• Message Processing<br/>• Deserialization<br/>• Business Logic]
+    end
+
+    subgraph "Monitoring & Ops"
+        METRICS[Metrics & Monitoring<br/>• Lag Monitoring<br/>• Throughput Tracking<br/>• Error Rates]
+        ALERTS[Alerting System<br/>• Threshold Breaches<br/>• ServiceNow Integration<br/>• On-Call Escalation]
+    end
+
+    DESIGN --> SCHEMA_REG
+    SCHEMA_REG --> CREATE
+    CREATE --> BROKER
+
+    PROD_APP --> PROD_CONFIG
+    PROD_CONFIG --> BROKER
+
+    BROKER --> PARTITION
+    PARTITION --> CONS_GROUP
+    CONS_GROUP --> CONS_APP
+
+    BROKER --> METRICS
+    METRICS --> ALERTS
+
+    classDef mgmt fill:#bbdefb,stroke:#1976d2,stroke-width:2px
+    classDef prod fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    classDef kafka fill:#fff9c4,stroke:#fbc02d,stroke-width:2px
+    classDef cons fill:#f8bbd0,stroke:#c2185b,stroke-width:2px
+    classDef monitor fill:#ffccbc,stroke:#e64a19,stroke-width:2px
+
+    class DESIGN,SCHEMA_REG,CREATE mgmt
+    class PROD_APP,PROD_CONFIG prod
+    class BROKER,PARTITION kafka
+    class CONS_GROUP,CONS_APP cons
+    class METRICS,ALERTS monitor
+  </div>
+</div>
+
+<!-- Environment Promotion Flow -->
+<div class="diagram-section">
+  <h2>Environment Promotion & Deployment Flow</h2>
+
+  <div class="mermaid">
+graph LR
+    subgraph "Development"
+        DEV_CODE[Code Development<br/>• Feature Implementation<br/>• Unit Tests]
+        DEV_DEPLOY[DEV Deployment<br/>• Kafka Topic Creation<br/>• Schema Registration]
+        DEV_TEST[DEV Testing<br/>• Functional Testing<br/>• Integration Tests]
+    end
+
+    subgraph "System Integration"
+        SIT_DEPLOY[SIT Deployment<br/>• Automated Pipeline<br/>• Configuration Update]
+        SIT_TEST[SIT Testing<br/>• System Integration<br/>• End-to-End Tests<br/>• Performance Tests]
+    end
+
+    subgraph "Customer Acceptance"
+        CAT_DEPLOY[CAT Deployment<br/>• Pre-Production Setup<br/>• Production-like Config]
+        CAT_TEST[CAT Testing<br/>• UAT Testing<br/>• Customer Validation<br/>• Load Testing]
+    end
+
+    subgraph "Production"
+        PROD_DEPLOY[PROD Deployment<br/>• Blue/Green Deploy<br/>• Rollback Plan]
+        PROD_MONITOR[Production Monitoring<br/>• Real-time Metrics<br/>• Alert Management]
+    end
+
+    DEV_CODE --> DEV_DEPLOY
+    DEV_DEPLOY --> DEV_TEST
+    DEV_TEST -->|Pass| SIT_DEPLOY
+    DEV_TEST -.->|Fail| DEV_CODE
+
+    SIT_DEPLOY --> SIT_TEST
+    SIT_TEST -->|Pass| CAT_DEPLOY
+    SIT_TEST -.->|Fail| DEV_CODE
+
+    CAT_DEPLOY --> CAT_TEST
+    CAT_TEST -->|Pass| PROD_DEPLOY
+    CAT_TEST -.->|Fail| DEV_CODE
+
+    PROD_DEPLOY --> PROD_MONITOR
+    PROD_MONITOR -.->|Issues| DEV_CODE
+
+    classDef dev fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef sit fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef cat fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef prod fill:#ffebee,stroke:#c62828,stroke-width:2px
+
+    class DEV_CODE,DEV_DEPLOY,DEV_TEST dev
+    class SIT_DEPLOY,SIT_TEST sit
+    class CAT_DEPLOY,CAT_TEST cat
+    class PROD_DEPLOY,PROD_MONITOR prod
+  </div>
+
+  <div class="info-box">
+    <h4>Key Deployment Principles</h4>
+    <p><strong>DEV:</strong> Rapid development and feature testing</p>
+    <p><strong>SIT:</strong> System integration and cross-component testing</p>
+    <p><strong>CAT:</strong> Customer acceptance and production readiness validation</p>
+    <p><strong>PROD:</strong> Live production with full monitoring and support</p>
+  </div>
+</div>
+
+</body>
+</html>
