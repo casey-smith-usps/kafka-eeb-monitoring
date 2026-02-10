@@ -56,25 +56,26 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
     setResults(null);
 
     try {
-      // Use Supabase Edge Function
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-kafka-topics`;
+      // Use local Python backend
+      const apiUrl = '/api/sync-kafka-topics';
 
-      console.log('Calling Supabase edge function at:', apiUrl);
+      console.log('Calling local Python backend at:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          kafkaAdminUrl: formData.kafkaAdminUrl,
-          clusterId: formData.clusterId,
-          kafkaApiKey: formData.kafkaApiKey,
-          kafkaApiSecret: formData.kafkaApiSecret,
-          schemaRegistryUrl: formData.schemaRegistryUrl,
-          schemaRegistryKey: formData.schemaRegistryKey,
-          schemaRegistrySecret: formData.schemaRegistrySecret
+          admin_url: formData.kafkaAdminUrl,
+          cluster_id: formData.clusterId,
+          api_key: formData.kafkaApiKey,
+          api_secret: formData.kafkaApiSecret,
+          cloud_provider: formData.cloudProvider,
+          cluster_name: formData.clusterName,
+          schema_registry_url: formData.schemaRegistryUrl,
+          schema_registry_key: formData.schemaRegistryKey,
+          schema_registry_secret: formData.schemaRegistrySecret
         })
       });
 
