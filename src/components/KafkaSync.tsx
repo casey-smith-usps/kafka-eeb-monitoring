@@ -56,14 +56,17 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
     setResults(null);
 
     try {
-      // Use Python backend
-      const apiUrl = '/api/sync-kafka-topics';
+      // Call Supabase Edge Function
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const apiUrl = `${supabaseUrl}/functions/v1/sync-kafka-topics`;
 
-      console.log('Calling Python backend at:', apiUrl);
+      console.log('Calling edge function at:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
