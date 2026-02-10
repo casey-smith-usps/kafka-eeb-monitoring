@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { FileText, Upload, Download, Trash2, Plus, Search, Filter, X } from 'lucide-react';
-import { documentsService } from '../services/database';
+import { FileText, Upload, Download, Trash2, Plus, Search, Filter, X, Link } from 'lucide-react';
+import { documentsService, topicsService } from '../services/database';
 
 export default function Documents() {
   const [documents, setDocuments] = useState<any[]>([]);
+  const [prodTopics, setProdTopics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,12 +15,14 @@ export default function Documents() {
     file_url: '',
     file_name: '',
     file_type: '',
-    category: 'General' as 'GCP' | 'Azure' | 'General',
-    tags: ''
+    category: 'General' as 'GCP' | 'Azure' | 'General' | 'ICD',
+    tags: '',
+    linkedTopicId: ''
   });
 
   useEffect(() => {
     loadDocuments();
+    loadProdTopics();
   }, [categoryFilter]);
 
   const loadDocuments = async () => {
@@ -36,6 +39,16 @@ export default function Documents() {
     }
   };
 
+  const loadProdTopics = async () => {
+    try {
+      const topics = await topicsService.getAll();
+      const prodOnly = topics.filter((t: any) => t.environment === 'prod');
+      setProdTopics(prodOnly);
+    } catch (error) {
+      console.error('Error loading PROD topics:', error);
+    }
+  };
+
   const handleUpload = async () => {
     if (!uploadForm.title || !uploadForm.file_url) {
       alert('Please provide a title and file URL');
@@ -43,7 +56,7 @@ export default function Documents() {
     }
 
     try {
-      await documentsService.create({
+      const newDoc = await documentsService.create({
         title: uploadForm.title,
         description: uploadForm.description,
         file_url: uploadForm.file_url,
@@ -54,6 +67,12 @@ export default function Documents() {
         tags: uploadForm.tags ? uploadForm.tags.split(',').map(t => t.trim()) : []
       });
 
+      if (uploadForm.linkedTopicId && uploadForm.category === 'ICD') {
+        await topicsService.update(uploadForm.linkedTopicId, {
+          icd_document_id: newDoc.id
+        });
+      }
+
       setUploadForm({
         title: '',
         description: '',
@@ -61,7 +80,8 @@ export default function Documents() {
         file_name: '',
         file_type: '',
         category: 'General',
-        tags: ''
+        tags: '',
+        linkedTopicId: ''
       });
       setShowUploadForm(false);
       loadDocuments();
@@ -98,6 +118,8 @@ export default function Documents() {
         return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'Azure':
         return 'bg-cyan-100 text-cyan-800 border-cyan-300';
+      case 'ICD':
+        return 'bg-purple-100 text-purple-800 border-purple-300';
       default:
         return 'bg-slate-100 text-slate-800 border-slate-300';
     }
@@ -141,7 +163,7 @@ export default function Documents() {
 
         <div className="flex items-center space-x-2">
           <Filter className="w-5 h-5 text-slate-600" />
-          {['All', 'GCP', 'Azure', 'General'].map((cat) => (
+          {['All', 'ICD', 'GCP', 'Azure', 'General'].map((cat) => (
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
@@ -190,6 +212,7 @@ export default function Documents() {
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="General">General</option>
+                  <option value="ICD">ICD (Interface Control Document)</option>
                   <option value="GCP">GCP</option>
                   <option value="Azure">Azure</option>
                 </select>
@@ -260,6 +283,30 @@ export default function Documents() {
                 placeholder="onboarding, setup, cloud, kafka"
               />
             </div>
+
+            {uploadForm.category === 'ICD' && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-purple-900 mb-2 flex items-center space-x-2">
+                  <Link className="w-4 h-4" />
+                  <span>Link to PROD Topic (Optional)</span>
+                </label>
+                <select
+                  value={uploadForm.linkedTopicId}
+                  onChange={(e) => setUploadForm({ ...uploadForm, linkedTopicId: e.target.value })}
+                  className="w-full px-4 py-2 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">None - Link later</option>
+                  {prodTopics.map((topic) => (
+                    <option key={topic.id} value={topic.id}>
+                      {topic.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-purple-700 mt-2">
+                  Select a PROD topic to automatically link this ICD document
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-end space-x-2">
               <button

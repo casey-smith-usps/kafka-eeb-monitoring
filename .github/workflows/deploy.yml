@@ -30,6 +30,10 @@ jobs:
           GITHUB_ACTIONS: true
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_CONFLUENT_ADMIN_URL: ${{ secrets.VITE_CONFLUENT_ADMIN_URL }}
+          VITE_CONFLUENT_CLUSTER_ID: ${{ secrets.VITE_CONFLUENT_CLUSTER_ID }}
+          VITE_CONFLUENT_API_KEY: ${{ secrets.VITE_CONFLUENT_API_KEY }}
+          VITE_CONFLUENT_API_SECRET: ${{ secrets.VITE_CONFLUENT_API_SECRET }}
 
       - name: Add .nojekyll file
         run: touch ./dist/.nojekyll

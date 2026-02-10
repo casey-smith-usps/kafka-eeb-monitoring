@@ -20,7 +20,9 @@ export default function TopicModal({ isOpen, onClose, onSave, topic }: TopicModa
     owner_team: '',
     partition_count: '',
     replication_factor: '',
-    retention_ms: ''
+    retention_ms: '',
+    icd_teams_url: '',
+    schema_registry_url: ''
   });
   const [saving, setSaving] = useState(false);
   const [nameValidation, setNameValidation] = useState({ isValid: true, issues: [] as string[] });
@@ -36,7 +38,9 @@ export default function TopicModal({ isOpen, onClose, onSave, topic }: TopicModa
         owner_team: topic.owner_team || '',
         partition_count: topic.partition_count?.toString() || '',
         replication_factor: topic.replication_factor?.toString() || '',
-        retention_ms: topic.retention_ms?.toString() || ''
+        retention_ms: topic.retention_ms?.toString() || '',
+        icd_teams_url: topic.icd_teams_url || '',
+        schema_registry_url: topic.schema_registry_url || ''
       });
     } else {
       setFormData({
@@ -47,7 +51,9 @@ export default function TopicModal({ isOpen, onClose, onSave, topic }: TopicModa
         owner_team: '',
         partition_count: '',
         replication_factor: '',
-        retention_ms: ''
+        retention_ms: '',
+        icd_teams_url: '',
+        schema_registry_url: ''
       });
     }
   }, [topic, isOpen]);
@@ -76,7 +82,9 @@ export default function TopicModal({ isOpen, onClose, onSave, topic }: TopicModa
         owner_team: formData.owner_team || null,
         partition_count: formData.partition_count ? parseInt(formData.partition_count) : null,
         replication_factor: formData.replication_factor ? parseInt(formData.replication_factor) : null,
-        retention_ms: formData.retention_ms ? parseInt(formData.retention_ms) : null
+        retention_ms: formData.retention_ms ? parseInt(formData.retention_ms) : null,
+        icd_teams_url: formData.icd_teams_url || null,
+        schema_registry_url: formData.schema_registry_url || null
       };
 
       if (topic) {
@@ -283,6 +291,50 @@ export default function TopicModal({ isOpen, onClose, onSave, topic }: TopicModa
               />
             </div>
           </div>
+
+          {/* ICD and Schema Section - Shown for PROD topics */}
+          {formData.environment === 'prod' && (
+            <div className="border-t border-slate-200 pt-6 space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 mb-2">PROD Topic Documentation</h4>
+                <p className="text-sm text-blue-700">
+                  Link the ICD (Interface Control Document) and Schema Registry for this production topic
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  ICD Microsoft Teams URL (Optional)
+                </label>
+                <input
+                  type="url"
+                  value={formData.icd_teams_url}
+                  onChange={(e) => setFormData({ ...formData, icd_teams_url: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://teams.microsoft.com/l/file/..."
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Direct link to the ICD document in Microsoft Teams
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Schema Registry URL (Optional)
+                </label>
+                <input
+                  type="url"
+                  value={formData.schema_registry_url}
+                  onChange={(e) => setFormData({ ...formData, schema_registry_url: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="https://psrc-xxxxx.region.provider.confluent.cloud/subjects/..."
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Link to schema definition in Confluent Schema Registry
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-200">
             <button

@@ -48,7 +48,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { kafkaAdminUrl, kafkaApiKey, kafkaApiSecret, clusterId } = body;
+    const {
+      admin_url: kafkaAdminUrl,
+      api_key: kafkaApiKey,
+      api_secret: kafkaApiSecret,
+      cluster_id: clusterId,
+      cloud_provider: cloudProvider,
+      cluster_name: clusterName
+    } = body;
 
     if (!kafkaAdminUrl) {
       throw new Error('Kafka Admin URL is required');
@@ -143,6 +150,8 @@ Deno.serve(async (req: Request) => {
               replication_factor: topic.replicationFactor,
               retention_ms: retentionMs,
               status: 'in_progress',
+              cloud_provider: cloudProvider || null,
+              cluster_name: clusterName || null,
             })
             .select()
             .single();

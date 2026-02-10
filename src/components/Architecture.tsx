@@ -43,7 +43,7 @@ export default function Architecture() {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 overflow-auto" style={{ height: 'calc(100vh - 200px)' }}>
         <iframe
-          src="/eeb_complete_architecture.html"
+          src={`${import.meta.env.BASE_URL}architecture-diagram.html`}
           className="w-full border-none"
           style={{
             height: '100%',

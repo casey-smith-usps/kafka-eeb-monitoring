@@ -25,7 +25,9 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
     clusterId: import.meta.env.VITE_CONFLUENT_CLUSTER_ID || '',
     kafkaApiKey: import.meta.env.VITE_CONFLUENT_API_KEY || '',
     kafkaApiSecret: import.meta.env.VITE_CONFLUENT_API_SECRET || '',
-    schemaRegistryUrl: ''
+    schemaRegistryUrl: '',
+    schemaRegistryKey: '',
+    schemaRegistrySecret: ''
   });
 
   const handleSync = async () => {
@@ -54,10 +56,8 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
     setResults(null);
 
     try {
-      // Use Python backend API instead of edge function
-      const apiUrl = import.meta.env.DEV
-        ? 'http://localhost:5000/api/sync-kafka-topics'
-        : '/api/sync-kafka-topics';
+      // Call Python backend (supports corporate proxy)
+      const apiUrl = '/api/sync-kafka-topics';
 
       console.log('Calling Python backend at:', apiUrl);
 
@@ -67,13 +67,15 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          cloud_provider: formData.cloudProvider,
-          cluster_name: formData.clusterName,
-          cluster_id: formData.clusterId,
           admin_url: formData.kafkaAdminUrl,
+          cluster_id: formData.clusterId,
           api_key: formData.kafkaApiKey,
           api_secret: formData.kafkaApiSecret,
-          schema_registry_url: formData.schemaRegistryUrl
+          cloud_provider: formData.cloudProvider,
+          cluster_name: formData.clusterName,
+          schema_registry_url: formData.schemaRegistryUrl,
+          schema_registry_key: formData.schemaRegistryKey,
+          schema_registry_secret: formData.schemaRegistrySecret
         })
       });
 
@@ -120,7 +122,9 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
       clusterId: import.meta.env.VITE_CONFLUENT_CLUSTER_ID || '',
       kafkaApiKey: import.meta.env.VITE_CONFLUENT_API_KEY || '',
       kafkaApiSecret: import.meta.env.VITE_CONFLUENT_API_SECRET || '',
-      schemaRegistryUrl: ''
+      schemaRegistryUrl: '',
+      schemaRegistryKey: '',
+      schemaRegistrySecret: ''
     });
   };
 
@@ -158,6 +162,7 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
                       <li>Partition counts and replication factors</li>
                       <li>Retention policies</li>
                       <li>Automatic naming validation</li>
+                      <li>Schema versions (if Schema Registry URL provided)</li>
                     </ul>
                   </div>
                 </div>
@@ -265,23 +270,66 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
                   </p>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Schema Registry URL (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.schemaRegistryUrl}
-                    onChange={(e) => setFormData({ ...formData, schemaRegistryUrl: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="https://psrc-xxxxx.region.provider.confluent.cloud"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    Enter to sync schema versions from Confluent Schema Registry
-                  </p>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">
-                    Example: https://psrc-xxxxx.us-east-2.aws.confluent.cloud
-                  </p>
+                <div className="border-t border-slate-200 pt-4">
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-start space-x-3">
+                      <GitBranch className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-purple-900 mb-1">Schema Registry Sync</h4>
+                        <p className="text-sm text-purple-800">
+                          Optionally sync schemas from Confluent Schema Registry to display schema versions and definitions for each topic
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Schema Registry URL (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.schemaRegistryUrl}
+                      onChange={(e) => setFormData({ ...formData, schemaRegistryUrl: e.target.value })}
+                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="https://psrc-xxxxx.region.provider.confluent.cloud"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Enter to sync schema versions from Confluent Schema Registry
+                    </p>
+                    <p className="text-xs text-slate-600 mt-1 font-medium">
+                      Example: https://psrc-xxxxx.us-east-2.aws.confluent.cloud
+                    </p>
+                  </div>
+
+                  {formData.schemaRegistryUrl && (
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Schema Registry API Key
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.schemaRegistryKey}
+                          onChange={(e) => setFormData({ ...formData, schemaRegistryKey: e.target.value })}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="Schema Registry Key"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Schema Registry API Secret
+                        </label>
+                        <input
+                          type="password"
+                          value={formData.schemaRegistrySecret}
+                          onChange={(e) => setFormData({ ...formData, schemaRegistrySecret: e.target.value })}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="Schema Registry Secret"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
