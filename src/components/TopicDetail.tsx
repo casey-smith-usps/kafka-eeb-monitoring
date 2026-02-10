@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, GitBranch, Activity, FileText, AlertCircle, Plus, ExternalLink, FileCode } from 'lucide-react';
+import { ArrowLeft, Edit, GitBranch, Activity, FileText, AlertCircle, Plus } from 'lucide-react';
 import { Topic, SchemaVersion, PerformanceMetric, Alert } from '../lib/supabase';
 import {
   topicsService,
@@ -184,165 +184,90 @@ export default function TopicDetail({ topicId, onBack, onEdit }: TopicDetailProp
 
         <div className="p-6">
           {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* ICD Documentation Section - Highlighted for PROD topics */}
-              {topic.environment === 'prod' && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-blue-900 mb-3 flex items-center space-x-2">
-                    <FileText className="w-5 h-5" />
-                    <span>Interface Control Document (ICD)</span>
-                  </h4>
-                  <div className="space-y-2">
-                    {topic.icd_teams_url ? (
-                      <a
-                        href={topic.icd_teams_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        <span>View ICD in Microsoft Teams</span>
-                      </a>
-                    ) : topic.icd_document_id ? (
-                      <div className="flex items-center space-x-2 text-blue-600 text-sm">
-                        <FileText className="w-4 h-4" />
-                        <span>ICD document uploaded (see Documents tab)</span>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-600">No ICD linked yet. Click Edit to add ICD link or upload document.</p>
-                    )}
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-semibold text-slate-900 mb-3">Configuration</h4>
+                <dl className="space-y-2">
+                  <div>
+                    <dt className="text-sm text-slate-500">Status</dt>
+                    <dd className="text-sm font-medium text-slate-900 capitalize">{topic.status.replace('_', ' ')}</dd>
                   </div>
-                </div>
-              )}
-
-              {/* Schema Information Section */}
-              {(topic.latest_schema || topic.schema_registry_url) && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-purple-900 mb-3 flex items-center space-x-2">
-                    <FileCode className="w-5 h-5" />
-                    <span>Schema Information</span>
-                  </h4>
-                  <div className="space-y-2">
-                    {topic.schema_registry_url && (
-                      <a
-                        href={topic.schema_registry_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-2 text-purple-600 hover:text-purple-800 text-sm"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        <span>View in Schema Registry</span>
-                      </a>
-                    )}
-                    {topic.schema_version && (
-                      <div className="text-sm text-slate-700">
-                        <span className="font-medium">Current Version:</span> {topic.schema_version}
-                      </div>
-                    )}
-                    {topic.schema_last_synced && (
-                      <div className="text-sm text-slate-500">
-                        Last synced: {new Date(topic.schema_last_synced).toLocaleString()}
-                      </div>
-                    )}
-                    {topic.latest_schema && (
-                      <details className="text-sm">
-                        <summary className="cursor-pointer text-purple-600 hover:text-purple-700">
-                          View Schema Definition
-                        </summary>
-                        <pre className="mt-2 p-3 bg-white rounded overflow-x-auto text-xs border border-purple-200">
-                          {JSON.stringify(topic.latest_schema, null, 2)}
-                        </pre>
-                      </details>
-                    )}
+                  <div>
+                    <dt className="text-sm text-slate-500">Environment</dt>
+                    <dd className="text-sm font-medium text-slate-900">{topic.environment || 'Not set'}</dd>
                   </div>
-                </div>
-              )}
+                  <div>
+                    <dt className="text-sm text-slate-500">Cloud Provider</dt>
+                    <dd className="text-sm font-medium text-slate-900">{topic.cloud_provider || 'Not set'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-slate-500">Cluster</dt>
+                    <dd className="text-sm font-medium text-slate-900">{topic.cluster_name || topic.cluster_id || 'Not set'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-slate-500">Owner Team</dt>
+                    <dd className="text-sm font-medium text-slate-900">{topic.owner_team || 'Not set'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-slate-500">Partitions</dt>
+                    <dd className="text-sm font-medium text-slate-900">{topic.partition_count || 'Not set'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-slate-500">Replication Factor</dt>
+                    <dd className="text-sm font-medium text-slate-900">{topic.replication_factor || 'Not set'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-slate-500">Retention</dt>
+                    <dd className="text-sm font-medium text-slate-900">
+                      {topic.retention_ms ? `${Math.floor(topic.retention_ms / 86400000)} days` : 'Not set'}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+              <div>
+                <h4 className="font-semibold text-slate-900 mb-3">Topic Structure</h4>
+                <dl className="space-y-2 mb-4">
+                  {topic.domain && (
+                    <div>
+                      <dt className="text-sm text-slate-500">Domain</dt>
+                      <dd className="text-sm font-medium text-slate-900">{topic.domain}</dd>
+                    </div>
+                  )}
+                  {topic.subdomain && (
+                    <div>
+                      <dt className="text-sm text-slate-500">Subdomain</dt>
+                      <dd className="text-sm font-medium text-slate-900">{topic.subdomain}</dd>
+                    </div>
+                  )}
+                  {topic.dataset && (
+                    <div>
+                      <dt className="text-sm text-slate-500">Dataset</dt>
+                      <dd className="text-sm font-medium text-slate-900">{topic.dataset}</dd>
+                    </div>
+                  )}
+                </dl>
 
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-semibold text-slate-900 mb-3">Configuration</h4>
+                <h4 className="font-semibold text-slate-900 mb-3">Naming Validation</h4>
+                <div className={`p-4 rounded-lg ${topic.naming_valid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <p className={`font-medium ${topic.naming_valid ? 'text-green-900' : 'text-red-900'}`}>
+                    {topic.naming_valid ? 'Valid naming convention' : 'Naming issues detected'}
+                  </p>
+                  {!topic.naming_valid && topic.naming_issues && (
+                    <p className="text-sm text-red-700 mt-2">{topic.naming_issues}</p>
+                  )}
+                </div>
+                <div className="mt-4">
+                  <h4 className="font-semibold text-slate-900 mb-2">Timestamps</h4>
                   <dl className="space-y-2">
                     <div>
-                      <dt className="text-sm text-slate-500">Status</dt>
-                      <dd className="text-sm font-medium text-slate-900 capitalize">{topic.status.replace('_', ' ')}</dd>
+                      <dt className="text-sm text-slate-500">Created</dt>
+                      <dd className="text-sm font-medium text-slate-900">{new Date(topic.created_at).toLocaleString()}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-slate-500">Environment</dt>
-                      <dd className="text-sm font-medium text-slate-900">{topic.environment || 'Not set'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-slate-500">Cloud Provider</dt>
-                      <dd className="text-sm font-medium text-slate-900">{topic.cloud_provider || 'Not set'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-slate-500">Cluster</dt>
-                      <dd className="text-sm font-medium text-slate-900">{topic.cluster_name || topic.cluster_id || 'Not set'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-slate-500">Owner Team</dt>
-                      <dd className="text-sm font-medium text-slate-900">{topic.owner_team || 'Not set'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-slate-500">Partitions</dt>
-                      <dd className="text-sm font-medium text-slate-900">{topic.partition_count || 'Not set'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-slate-500">Replication Factor</dt>
-                      <dd className="text-sm font-medium text-slate-900">{topic.replication_factor || 'Not set'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-slate-500">Retention</dt>
-                      <dd className="text-sm font-medium text-slate-900">
-                        {topic.retention_ms ? `${Math.floor(topic.retention_ms / 86400000)} days` : 'Not set'}
-                      </dd>
+                      <dt className="text-sm text-slate-500">Last Updated</dt>
+                      <dd className="text-sm font-medium text-slate-900">{new Date(topic.updated_at).toLocaleString()}</dd>
                     </div>
                   </dl>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-900 mb-3">Topic Structure</h4>
-                  <dl className="space-y-2 mb-4">
-                    {topic.domain && (
-                      <div>
-                        <dt className="text-sm text-slate-500">Domain</dt>
-                        <dd className="text-sm font-medium text-slate-900">{topic.domain}</dd>
-                      </div>
-                    )}
-                    {topic.subdomain && (
-                      <div>
-                        <dt className="text-sm text-slate-500">Subdomain</dt>
-                        <dd className="text-sm font-medium text-slate-900">{topic.subdomain}</dd>
-                      </div>
-                    )}
-                    {topic.dataset && (
-                      <div>
-                        <dt className="text-sm text-slate-500">Dataset</dt>
-                        <dd className="text-sm font-medium text-slate-900">{topic.dataset}</dd>
-                      </div>
-                    )}
-                  </dl>
-
-                  <h4 className="font-semibold text-slate-900 mb-3">Naming Validation</h4>
-                  <div className={`p-4 rounded-lg ${topic.naming_valid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                    <p className={`font-medium ${topic.naming_valid ? 'text-green-900' : 'text-red-900'}`}>
-                      {topic.naming_valid ? 'Valid naming convention' : 'Naming issues detected'}
-                    </p>
-                    {!topic.naming_valid && topic.naming_issues && (
-                      <p className="text-sm text-red-700 mt-2">{topic.naming_issues}</p>
-                    )}
-                  </div>
-                  <div className="mt-4">
-                    <h4 className="font-semibold text-slate-900 mb-2">Timestamps</h4>
-                    <dl className="space-y-2">
-                      <div>
-                        <dt className="text-sm text-slate-500">Created</dt>
-                        <dd className="text-sm font-medium text-slate-900">{new Date(topic.created_at).toLocaleString()}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm text-slate-500">Last Updated</dt>
-                        <dd className="text-sm font-medium text-slate-900">{new Date(topic.updated_at).toLocaleString()}</dd>
-                      </div>
-                    </dl>
-                  </div>
                 </div>
               </div>
             </div>

@@ -27,12 +27,6 @@ export type Topic = {
   partition_count: number | null;
   replication_factor: number | null;
   retention_ms: number | null;
-  icd_teams_url: string | null;
-  icd_document_id: string | null;
-  schema_registry_url: string | null;
-  latest_schema: any;
-  schema_version: number | null;
-  schema_last_synced: string | null;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
