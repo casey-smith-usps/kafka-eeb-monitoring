@@ -56,28 +56,25 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
     setResults(null);
 
     try {
-      // Use Python backend API instead of edge function
-      const apiUrl = import.meta.env.DEV
-        ? 'http://localhost:5000/api/sync-kafka-topics'
-        : '/api/sync-kafka-topics';
+      // Use Supabase Edge Function
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-kafka-topics`;
 
-      console.log('Calling Python backend at:', apiUrl);
+      console.log('Calling Supabase edge function at:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          cloud_provider: formData.cloudProvider,
-          cluster_name: formData.clusterName,
-          cluster_id: formData.clusterId,
-          admin_url: formData.kafkaAdminUrl,
-          api_key: formData.kafkaApiKey,
-          api_secret: formData.kafkaApiSecret,
-          schema_registry_url: formData.schemaRegistryUrl,
-          schema_registry_key: formData.schemaRegistryKey,
-          schema_registry_secret: formData.schemaRegistrySecret
+          kafkaAdminUrl: formData.kafkaAdminUrl,
+          clusterId: formData.clusterId,
+          kafkaApiKey: formData.kafkaApiKey,
+          kafkaApiSecret: formData.kafkaApiSecret,
+          schemaRegistryUrl: formData.schemaRegistryUrl,
+          schemaRegistryKey: formData.schemaRegistryKey,
+          schemaRegistrySecret: formData.schemaRegistrySecret
         })
       });
 
