@@ -48,14 +48,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const {
-      admin_url: kafkaAdminUrl,
-      api_key: kafkaApiKey,
-      api_secret: kafkaApiSecret,
-      cluster_id: clusterId,
-      cloud_provider: cloudProvider,
-      cluster_name: clusterName
-    } = body;
+    const { kafkaAdminUrl, kafkaApiKey, kafkaApiSecret, clusterId, schemaRegistryUrl, schemaRegistryKey, schemaRegistrySecret } = body;
 
     if (!kafkaAdminUrl) {
       throw new Error('Kafka Admin URL is required');
@@ -130,29 +123,77 @@ Deno.serve(async (req: Request) => {
           ? parseInt(topic.config['retention.ms'])
           : null;
 
+        let schemaData: any = null;
+        let schemaVersion: number | null = null;
+        let schemaUrl: string | null = null;
+
+        if (schemaRegistryUrl) {
+          try {
+            const schemaSubject = `${topic.name}-value`;
+            const schemaAuthHeader = schemaRegistryKey && schemaRegistrySecret
+              ? `Basic ${btoa(`${schemaRegistryKey}:${schemaRegistrySecret}`)}`
+              : undefined;
+
+            const schemaHeaders: Record<string, string> = {};
+            if (schemaAuthHeader) {
+              schemaHeaders['Authorization'] = schemaAuthHeader;
+            }
+
+            const schemaResponse = await fetch(
+              `${schemaRegistryUrl}/subjects/${schemaSubject}/versions/latest`,
+              { headers: schemaHeaders }
+            );
+
+            if (schemaResponse.ok) {
+              const schemaJson = await schemaResponse.json();
+              schemaData = typeof schemaJson.schema === 'string' ? JSON.parse(schemaJson.schema) : schemaJson.schema;
+              schemaVersion = schemaJson.version;
+              schemaUrl = `${schemaRegistryUrl}/subjects/${schemaSubject}`;
+            }
+          } catch (schemaError) {
+            console.error(`Failed to fetch schema for ${topic.name}:`, schemaError);
+          }
+        }
+
         if (existingTopic) {
+          const updateData: any = {
+            partition_count: topic.partitions,
+            replication_factor: topic.replicationFactor,
+            retention_ms: retentionMs,
+            updated_at: new Date().toISOString(),
+          };
+
+          if (schemaData) {
+            updateData.latest_schema = schemaData;
+            updateData.schema_version = schemaVersion;
+            updateData.schema_registry_url = schemaUrl;
+            updateData.schema_last_synced = new Date().toISOString();
+          }
+
           await supabase
             .from('topics')
-            .update({
-              partition_count: topic.partitions,
-              replication_factor: topic.replicationFactor,
-              retention_ms: retentionMs,
-              updated_at: new Date().toISOString(),
-            })
+            .update(updateData)
             .eq('id', existingTopic.id);
           results.updated++;
         } else {
+          const insertData: any = {
+            name: topic.name,
+            partition_count: topic.partitions,
+            replication_factor: topic.replicationFactor,
+            retention_ms: retentionMs,
+            status: 'in_progress',
+          };
+
+          if (schemaData) {
+            insertData.latest_schema = schemaData;
+            insertData.schema_version = schemaVersion;
+            insertData.schema_registry_url = schemaUrl;
+            insertData.schema_last_synced = new Date().toISOString();
+          }
+
           const { data: newTopic, error } = await supabase
             .from('topics')
-            .insert({
-              name: topic.name,
-              partition_count: topic.partitions,
-              replication_factor: topic.replicationFactor,
-              retention_ms: retentionMs,
-              status: 'in_progress',
-              cloud_provider: cloudProvider || null,
-              cluster_name: clusterName || null,
-            })
+            .insert(insertData)
             .select()
             .single();
 

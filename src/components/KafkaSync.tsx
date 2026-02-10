@@ -56,8 +56,10 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
     setResults(null);
 
     try {
-      // Call Python backend (supports corporate proxy)
-      const apiUrl = '/api/sync-kafka-topics';
+      // Use Python backend API instead of edge function
+      const apiUrl = import.meta.env.DEV
+        ? 'http://localhost:5000/api/sync-kafka-topics'
+        : '/api/sync-kafka-topics';
 
       console.log('Calling Python backend at:', apiUrl);
 
@@ -67,12 +69,12 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          admin_url: formData.kafkaAdminUrl,
-          cluster_id: formData.clusterId,
-          api_key: formData.kafkaApiKey,
-          api_secret: formData.kafkaApiSecret,
           cloud_provider: formData.cloudProvider,
           cluster_name: formData.clusterName,
+          cluster_id: formData.clusterId,
+          admin_url: formData.kafkaAdminUrl,
+          api_key: formData.kafkaApiKey,
+          api_secret: formData.kafkaApiSecret,
           schema_registry_url: formData.schemaRegistryUrl,
           schema_registry_key: formData.schemaRegistryKey,
           schema_registry_secret: formData.schemaRegistrySecret
