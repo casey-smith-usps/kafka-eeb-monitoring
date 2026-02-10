@@ -168,6 +168,26 @@ Deno.serve(async (req: Request) => {
             updateData.schema_version = schemaVersion;
             updateData.schema_registry_url = schemaUrl;
             updateData.schema_last_synced = new Date().toISOString();
+
+            // Check if this schema version already exists
+            const { data: existingSchema } = await supabase
+              .from('topic_schemas')
+              .select('id')
+              .eq('topic_id', existingTopic.id)
+              .eq('schema_version', schemaVersion)
+              .maybeSingle();
+
+            // Only insert if this version doesn't exist
+            if (!existingSchema) {
+              await supabase.from('topic_schemas').insert({
+                topic_id: existingTopic.id,
+                schema_version: schemaVersion || 1,
+                schema_definition: schemaData,
+                schema_type: schemaData.type || 'AVRO',
+                uploaded_by: 'system',
+                notes: 'Auto-synced from Schema Registry',
+              });
+            }
           }
 
           await supabase
@@ -198,6 +218,18 @@ Deno.serve(async (req: Request) => {
             .single();
 
           if (error) throw error;
+
+          // Insert schema into topic_schemas for history tracking
+          if (schemaData && newTopic) {
+            await supabase.from('topic_schemas').insert({
+              topic_id: newTopic.id,
+              schema_version: schemaVersion || 1,
+              schema_definition: schemaData,
+              schema_type: schemaData.type || 'AVRO',
+              uploaded_by: 'system',
+              notes: 'Auto-synced from Schema Registry',
+            });
+          }
 
           const namingPattern = /^(dev|sit|cat|prod)\./;
           if (!namingPattern.test(topic.name)) {
