@@ -351,7 +351,9 @@ export default function TopicDetail({ topicId, onBack, onEdit }: TopicDetailProp
           {activeTab === 'schema' && (
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-slate-900">Schema Versions ({schemas.length})</h4>
+                <h4 className="font-semibold text-slate-900">
+                  Schema Versions ({schemas.length + (topic.latest_schema ? 1 : 0)})
+                </h4>
                 <button
                   onClick={addSchemaVersion}
                   className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
@@ -360,10 +362,59 @@ export default function TopicDetail({ topicId, onBack, onEdit }: TopicDetailProp
                   <span>Add Version</span>
                 </button>
               </div>
-              {schemas.length === 0 ? (
+
+              {schemas.length === 0 && !topic.latest_schema ? (
                 <p className="text-slate-500 text-center py-8">No schema versions yet</p>
               ) : (
                 <div className="space-y-4">
+                  {/* Display synced schema from Kafka if available */}
+                  {topic.latest_schema && (
+                    <div className="border border-purple-300 bg-purple-50 rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <span className="font-semibold text-purple-900">
+                            Version {topic.schema_version || 'Unknown'}
+                          </span>
+                          <span className="text-sm text-purple-600 ml-2">
+                            (Synced from Schema Registry)
+                          </span>
+                        </div>
+                        <span className="text-sm text-purple-600">
+                          {topic.schema_last_synced
+                            ? new Date(topic.schema_last_synced).toLocaleDateString()
+                            : 'Unknown date'}
+                        </span>
+                      </div>
+                      {topic.schema_registry_url && (
+                        <div className="mb-3">
+                          <a
+                            href={topic.schema_registry_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center space-x-2 text-purple-600 hover:text-purple-800 text-sm"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            <span>View in Schema Registry</span>
+                          </a>
+                        </div>
+                      )}
+                      {topic.schema_last_synced && (
+                        <p className="text-sm text-purple-700 mb-3">
+                          Last synced: {new Date(topic.schema_last_synced).toLocaleString()}
+                        </p>
+                      )}
+                      <details className="text-sm">
+                        <summary className="cursor-pointer text-purple-600 hover:text-purple-700 font-medium">
+                          View Schema Definition
+                        </summary>
+                        <pre className="mt-2 p-3 bg-white rounded overflow-x-auto text-xs border border-purple-200">
+                          {JSON.stringify(topic.latest_schema, null, 2)}
+                        </pre>
+                      </details>
+                    </div>
+                  )}
+
+                  {/* Display manually added schema versions */}
                   {schemas.map(schema => (
                     <div key={schema.id} className="border border-slate-200 rounded-lg p-4">
                       <div className="flex items-start justify-between mb-2">

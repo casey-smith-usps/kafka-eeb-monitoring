@@ -197,9 +197,13 @@ def sync_kafka_topics():
                     schema_subject = f'{topic_name}-value'
                     schema_url = f'{schema_registry_url}/subjects/{schema_subject}/versions/latest'
 
+                    # Use Schema Registry credentials, not Kafka credentials
+                    schema_auth_key = schema_registry_key if schema_registry_key else api_key
+                    schema_auth_secret = schema_registry_secret if schema_registry_secret else api_secret
+
                     schema_response = requests.get(
                         schema_url,
-                        auth=HTTPBasicAuth(api_key, api_secret),
+                        auth=HTTPBasicAuth(schema_auth_key, schema_auth_secret),
                         proxies=proxies if proxies else None,
                         timeout=10
                     )
@@ -217,6 +221,13 @@ def sync_kafka_topics():
                         topic_data['schema_last_synced'] = datetime.utcnow().isoformat()
                         schema_synced_count += 1
                         print(f"   📊 Schema v{schema_data.get('version')} synced for {topic_name}")
+                    elif schema_response.status_code == 404:
+                        # Schema doesn't exist for this topic - that's ok
+                        print(f"   ℹ️  No schema found for {topic_name} (subject: {schema_subject})")
+                    else:
+                        # Other error - log it
+                        print(f"   ⚠️ Schema Registry returned {schema_response.status_code} for {topic_name}")
+                        print(f"      Response: {schema_response.text[:200]}")
                 except Exception as schema_error:
                     # Don't fail topic sync if schema fetch fails
                     print(f"   ⚠️ Schema fetch failed for {topic_name}: {str(schema_error)}")
@@ -346,10 +357,14 @@ def get_today_updates():
 @app.route('/<path:path>')
 def serve_react(path):
     """Serve the React app"""
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
+    # Serve static files (HTML, CSS, JS, etc.)
+    if path != "":
+        file_path = os.path.join(app.static_folder, path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return send_from_directory(app.static_folder, path)
+
+    # For all other routes, serve the React app's index.html
+    return send_from_directory(app.static_folder, 'index.html')
 
 
 if __name__ == '__main__':
