@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { RefreshCw, CheckCircle, AlertCircle, Info, X, GitBranch } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Info, X, GitBranch, Trash2 } from 'lucide-react';
+import { CLUSTER_CONFIGS, getClusterById } from '../config/clusterConfig';
+import { supabase } from '../lib/supabase';
 
 interface KafkaSyncProps {
   isOpen: boolean;
@@ -17,7 +19,9 @@ interface SyncResults {
 
 export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSyncProps) {
   const [syncing, setSyncing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [results, setResults] = useState<SyncResults | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<string>('');
   const [formData, setFormData] = useState({
     cloudProvider: 'Azure',
     clusterName: 'DEV Azure',
@@ -29,6 +33,96 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
     schemaRegistryKey: '',
     schemaRegistrySecret: ''
   });
+
+  // Handle predefined cluster selection
+  const handleClusterSelect = (clusterId: string) => {
+    setSelectedCluster(clusterId);
+
+    if (!clusterId) {
+      // Reset to manual entry
+      return;
+    }
+
+    const cluster = getClusterById(clusterId);
+    if (cluster) {
+      setFormData({
+        cloudProvider: cluster.cloudProvider,
+        clusterName: cluster.displayName,
+        kafkaAdminUrl: cluster.restEndpoint,
+        clusterId: cluster.clusterId,
+        kafkaApiKey: cluster.apiKey,
+        kafkaApiSecret: cluster.apiSecret,
+        schemaRegistryUrl: cluster.schemaRegistryEndpoint,
+        schemaRegistryKey: cluster.schemaApiKey,
+        schemaRegistrySecret: cluster.schemaApiSecret
+      });
+    }
+  };
+
+  // Mass delete topics for a specific cluster
+  const handleMassDelete = async () => {
+    if (!formData.clusterId) {
+      alert('Please select a cluster first');
+      return;
+    }
+
+    const confirmation = prompt(
+      `⚠️ WARNING: This will permanently delete ALL topics from cluster "${formData.clusterName}" (${formData.clusterId}).\n\n` +
+      `This action CANNOT be undone!\n\n` +
+      `Type "DELETE ${formData.clusterId}" to confirm:`
+    );
+
+    if (confirmation !== `DELETE ${formData.clusterId}`) {
+      alert('Deletion cancelled - confirmation text did not match');
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      // Get all topics for this cluster
+      const { data: topics, error: fetchError } = await supabase
+        .from('topics')
+        .select('id')
+        .eq('cluster_id', formData.clusterId);
+
+      if (fetchError) throw fetchError;
+
+      if (!topics || topics.length === 0) {
+        alert('No topics found for this cluster');
+        setDeleting(false);
+        return;
+      }
+
+      const topicIds = topics.map(t => t.id);
+
+      // Delete related records first (alerts, schema_versions, performance_metrics, etc.)
+      await Promise.all([
+        supabase.from('alerts').delete().in('topic_id', topicIds),
+        supabase.from('schema_versions').delete().in('topic_id', topicIds),
+        supabase.from('performance_metrics').delete().in('topic_id', topicIds),
+        supabase.from('topic_notes').delete().in('topic_id', topicIds),
+        supabase.from('status_updates').delete().in('topic_id', topicIds)
+      ]);
+
+      // Delete the topics
+      const { error: deleteError } = await supabase
+        .from('topics')
+        .delete()
+        .eq('cluster_id', formData.clusterId);
+
+      if (deleteError) throw deleteError;
+
+      alert(`Successfully deleted ${topics.length} topics from cluster ${formData.clusterName}`);
+      onSyncComplete();
+      handleReset();
+    } catch (error: any) {
+      console.error('Mass delete error:', error);
+      alert(`Failed to delete topics: ${error.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleSync = async () => {
     if (!formData.kafkaAdminUrl) {
@@ -57,7 +151,8 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
 
     try {
       // Call Python backend (supports corporate proxy)
-      const apiUrl = '/api/sync-kafka-topics';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
+      const apiUrl = backendUrl ? `${backendUrl}/api/sync-kafka-topics` : '/api/sync-kafka-topics';
 
       console.log('Calling Python backend at:', apiUrl);
 
@@ -115,6 +210,7 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
 
   const handleReset = () => {
     setResults(null);
+    setSelectedCluster('');
     setFormData({
       cloudProvider: 'Azure',
       clusterName: 'DEV Azure',
@@ -167,6 +263,62 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
                   </div>
                 </div>
               </div>
+
+              {/* Predefined Cluster Selection */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-4">
+                <h3 className="font-semibold text-green-900 mb-3 flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Quick Select: Predefined Clusters</span>
+                </h3>
+                <select
+                  value={selectedCluster}
+                  onChange={(e) => handleClusterSelect(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                >
+                  <option value="">-- Select a predefined cluster (or enter manually below) --</option>
+                  <optgroup label="DEV Clusters">
+                    {CLUSTER_CONFIGS.filter(c => c.environment === 'dev').map(cluster => (
+                      <option key={cluster.id} value={cluster.id}>
+                        {cluster.displayName} ({cluster.cloudProvider})
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="SIT Clusters">
+                    {CLUSTER_CONFIGS.filter(c => c.environment === 'sit').map(cluster => (
+                      <option key={cluster.id} value={cluster.id}>
+                        {cluster.displayName} ({cluster.cloudProvider})
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="CAT Clusters">
+                    {CLUSTER_CONFIGS.filter(c => c.environment === 'cat').map(cluster => (
+                      <option key={cluster.id} value={cluster.id}>
+                        {cluster.displayName} ({cluster.cloudProvider})
+                        {cluster.schemaApiKey === '' ? ' - Manual Schema Only' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <p className="text-xs text-green-700 mt-2">
+                  Select a cluster to auto-fill all credentials securely. Or enter manually below.
+                </p>
+              </div>
+
+              {/* CAT Azure Manual Schema Warning */}
+              {selectedCluster === 'cat-azure' && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-amber-900 mb-1">CAT Azure Schema Note</h4>
+                      <p className="text-sm text-amber-800">
+                        This cluster has limited Schema Registry API access. Topics will sync, but schemas may need manual upload.
+                        Consider syncing CAT GCP first (which has full schema access), then manually handling CAT Azure schemas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-4">
                 <div>
@@ -345,21 +497,35 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3">
+              <div className="flex justify-between items-center">
+                {/* Mass Delete Button (Left Side) */}
                 <button
-                  onClick={onClose}
-                  className="px-6 py-3 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                  onClick={handleMassDelete}
+                  disabled={deleting || !formData.clusterId}
+                  className="flex items-center space-x-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                  title="Delete all topics from the selected cluster"
                 >
-                  Cancel
+                  <Trash2 className={`w-5 h-5 ${deleting ? 'animate-spin' : ''}`} />
+                  <span>{deleting ? 'Deleting...' : 'Mass Delete Cluster'}</span>
                 </button>
-                <button
-                  onClick={handleSync}
-                  disabled={syncing || !formData.kafkaAdminUrl}
-                  className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-                >
-                  <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
-                  <span>{syncing ? 'Syncing...' : 'Sync Topics'}</span>
-                </button>
+
+                {/* Sync Buttons (Right Side) */}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={onClose}
+                    className="px-6 py-3 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSync}
+                    disabled={syncing || !formData.kafkaAdminUrl}
+                    className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                  >
+                    <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
+                    <span>{syncing ? 'Syncing...' : 'Sync Topics'}</span>
+                  </button>
+                </div>
               </div>
             </>
           )}

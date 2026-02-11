@@ -120,10 +120,12 @@ Deno.serve(async (req: Request) => {
 
     for (const topic of topics) {
       try {
+        // Check for existing topic by BOTH name AND cluster_id to prevent duplicates
         const { data: existingTopic } = await supabase
           .from('topics')
           .select('id, partition_count, replication_factor')
           .eq('name', topic.name)
+          .eq('cluster_id', clusterId)
           .maybeSingle();
 
         const retentionMs = topic.config?.['retention.ms']
@@ -131,17 +133,21 @@ Deno.serve(async (req: Request) => {
           : null;
 
         if (existingTopic) {
+          // Update existing topic with latest data
           await supabase
             .from('topics')
             .update({
               partition_count: topic.partitions,
               replication_factor: topic.replicationFactor,
               retention_ms: retentionMs,
+              cloud_provider: cloudProvider || null,
+              cluster_name: clusterName || null,
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingTopic.id);
           results.updated++;
         } else {
+          // Create new topic with cluster_id
           const { data: newTopic, error } = await supabase
             .from('topics')
             .insert({
@@ -152,6 +158,7 @@ Deno.serve(async (req: Request) => {
               status: 'in_progress',
               cloud_provider: cloudProvider || null,
               cluster_name: clusterName || null,
+              cluster_id: clusterId,
             })
             .select()
             .single();
