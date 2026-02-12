@@ -346,7 +346,7 @@ export default function TopicModal({ isOpen, onClose, onSave, topic }: TopicModa
             </button>
             <button
               type="submit"
-              disabled={saving || !nameValidation.isValid}
+              disabled={saving || (!topic && !nameValidation.isValid)}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
             >
               {saving ? 'Saving...' : topic ? 'Update Topic' : 'Create Topic'}
