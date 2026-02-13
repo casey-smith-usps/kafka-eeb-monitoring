@@ -175,6 +175,11 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
       });
 
       if (!response.ok) {
+        // 405 Method Not Allowed = GitHub Pages (no backend)
+        if (response.status === 405) {
+          throw new Error('GITHUB_PAGES_NO_BACKEND');
+        }
+
         const errorText = await response.text();
         console.error('Backend error response:', errorText);
         let errorData;
@@ -201,7 +206,30 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
       }
     } catch (error: any) {
       const errorMessage = error.message || 'Unknown error occurred';
-      alert(`Sync failed: ${errorMessage}`);
+
+      // Handle specific error cases
+      if (errorMessage === 'GITHUB_PAGES_NO_BACKEND') {
+        alert(
+          '🌐 GitHub Pages - View Only Mode\n\n' +
+          'You are on GitHub Pages, which can only VIEW data. Manual sync is not available here.\n\n' +
+          'To sync Kafka topics:\n' +
+          '1. Clone the repo and run: python app.py\n' +
+          '2. Access locally at: http://localhost:5000\n' +
+          '3. Or use automated sync: python auto_sync.py\n\n' +
+          'Contact the admin to request a sync, or set up the local backend yourself.'
+        );
+      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        alert(
+          '❌ Cannot connect to backend\n\n' +
+          'Make sure the Python Flask backend is running:\n' +
+          '1. Run: python app.py\n' +
+          '2. Access at: http://localhost:5000\n' +
+          '3. Or use: python auto_sync.py\n\n' +
+          'Note: Kafka sync requires local backend due to corporate proxy.'
+        );
+      } else {
+        alert(`Sync failed: ${errorMessage}`);
+      }
       console.error('Kafka sync error:', error);
     } finally {
       setSyncing(false);
@@ -245,6 +273,21 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
         <div className="p-6 space-y-6">
           {!results && (
             <>
+              <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-amber-900 mb-1">Local Backend Required</h3>
+                    <p className="text-sm text-amber-800">
+                      Kafka sync requires the Flask backend running locally (<code className="bg-amber-100 px-1 rounded">python app.py</code>) on port 5000 due to corporate proxy requirements.
+                    </p>
+                    <p className="text-sm text-amber-800 mt-2">
+                      <strong>GitHub Pages users:</strong> You can only VIEW data. To sync, ask the admin to run the local sync or use <code className="bg-amber-100 px-1 rounded">auto_sync.py</code>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start space-x-3">
                   <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -600,3 +643,4 @@ export default function KafkaSync({ isOpen, onClose, onSyncComplete }: KafkaSync
     </div>
   );
 }
+
