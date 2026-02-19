@@ -7,7 +7,8 @@ import {
   Activity,
   FileText,
   Network,
-  Phone
+  Phone,
+  Sparkles
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -24,6 +25,7 @@ export default function Layout({ children, currentView, onViewChange }: LayoutPr
     { id: 'alerts', label: 'Alerts', icon: AlertCircle },
     { id: 'lineage', label: 'Topic Lineage', icon: GitBranch },
     { id: 'oncall', label: 'On-Call & Escalation', icon: Phone },
+    { id: 'ai-assistant', label: 'AI Assistant', icon: Sparkles },
     { id: 'documents', label: 'Documents', icon: FileText },
     { id: 'architecture', label: 'Architecture', icon: Network },
   ];

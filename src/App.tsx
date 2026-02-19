@@ -12,6 +12,7 @@ import TopicLineage from './components/TopicLineage';
 import OnCallEscalation from './components/OnCallEscalation';
 import Documents from './components/Documents';
 import Architecture from './components/Architecture';
+import { AIAssistant } from './components/AIAssistant';
 import { Topic } from './lib/supabase';
 
 function App() {
@@ -96,6 +97,8 @@ function App() {
         return <Documents />;
       case 'architecture':
         return <Architecture />;
+      case 'ai-assistant':
+        return <AIAssistant />;
       default:
         return <DashboardOverview onNavigate={setCurrentView} />;
     }
