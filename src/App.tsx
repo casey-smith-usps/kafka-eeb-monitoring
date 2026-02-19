@@ -13,6 +13,7 @@ import OnCallEscalation from './components/OnCallEscalation';
 import Documents from './components/Documents';
 import Architecture from './components/Architecture';
 import { AIAssistant } from './components/AIAssistant';
+import { DataStreaming } from './components/DataStreaming';
 import { Topic } from './lib/supabase';
 
 function App() {
@@ -91,6 +92,8 @@ function App() {
         return <AlertsDashboard />;
       case 'lineage':
         return <TopicLineage />;
+      case 'streaming':
+        return <DataStreaming />;
       case 'oncall':
         return <OnCallEscalation />;
       case 'documents':

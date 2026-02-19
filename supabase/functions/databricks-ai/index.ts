@@ -6,9 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const DATABRICKS_HOST = Deno.env.get('DATABRICKS_HOST');
-const DATABRICKS_TOKEN = Deno.env.get('DATABRICKS_TOKEN');
-const DATABRICKS_ENDPOINT = Deno.env.get('DATABRICKS_ENDPOINT');
+const DATABRICKS_HOST = Deno.env.get('DATABRICKS_HOST')?.trim();
+const DATABRICKS_TOKEN = Deno.env.get('DATABRICKS_TOKEN')?.trim();
+const DATABRICKS_ENDPOINT_NAME = Deno.env.get('DATABRICKS_ENDPOINT_NAME')?.trim();
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -30,7 +30,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    if (!DATABRICKS_HOST || !DATABRICKS_TOKEN || !DATABRICKS_ENDPOINT) {
+    if (!DATABRICKS_HOST || !DATABRICKS_TOKEN || !DATABRICKS_ENDPOINT_NAME) {
       throw new Error('Databricks configuration missing in environment variables');
     }
 
@@ -40,7 +40,11 @@ Deno.serve(async (req: Request) => {
       throw new Error('Invalid request: messages array is required');
     }
 
-    const databricksUrl = `${DATABRICKS_HOST}/serving-endpoints/${DATABRICKS_ENDPOINT}/invocations`;
+    const databricksUrl = `${DATABRICKS_HOST}/serving-endpoints/${DATABRICKS_ENDPOINT_NAME}/invocations`;
+
+    console.log('Constructed Databricks URL:', databricksUrl);
+    console.log('DATABRICKS_HOST:', DATABRICKS_HOST);
+    console.log('DATABRICKS_ENDPOINT_NAME:', DATABRICKS_ENDPOINT_NAME);
 
     const response = await fetch(databricksUrl, {
       method: 'POST',

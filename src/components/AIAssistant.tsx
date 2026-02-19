@@ -52,12 +52,14 @@ export function AIAssistant() {
           .from('alerts')
           .select('alert_type, severity, environment, status')
           .order('created_at', { ascending: false })
-          .limit(10),
+          .limit(10)
+          .then(res => res.error ? { data: [], error: res.error } : res),
         supabase
           .from('topics')
           .select('name, environment, cloud_provider, status')
-          .order('last_synced', { ascending: false })
-          .limit(20),
+          .order('created_at', { ascending: false })
+          .limit(20)
+          .then(res => res.error ? { data: [], error: res.error } : res),
       ]);
 
       let context = 'Current System State:\n\n';
@@ -119,7 +121,16 @@ export function AIAssistant() {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get response from AI');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to get response from AI';
+
+      // Check for rate limit or permission errors
+      if (errorMessage.includes('REQUEST_LIMIT_EXCEEDED')) {
+        setError('⏱️ Rate limit exceeded. The Databricks model endpoint has reached its rate limit. Please wait a few minutes and try again, or contact your Databricks admin to increase the rate limit for the endpoint.');
+      } else if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('rate limit')) {
+        setError('AI Assistant is currently unavailable. The Databricks endpoint requires administrator permission to enable. Please contact your workspace admin to set the rate limit above 0.');
+      } else {
+        setError(errorMessage);
+      }
       console.error('Error:', err);
     } finally {
       setIsLoading(false);

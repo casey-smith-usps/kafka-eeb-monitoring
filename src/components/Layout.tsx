@@ -8,7 +8,8 @@ import {
   FileText,
   Network,
   Phone,
-  Sparkles
+  Sparkles,
+  Radio
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -24,6 +25,7 @@ export default function Layout({ children, currentView, onViewChange }: LayoutPr
     { id: 'standup', label: 'Morning Standup', icon: Activity },
     { id: 'alerts', label: 'Alerts', icon: AlertCircle },
     { id: 'lineage', label: 'Topic Lineage', icon: GitBranch },
+    { id: 'streaming', label: 'Data Streaming', icon: Radio },
     { id: 'oncall', label: 'On-Call & Escalation', icon: Phone },
     { id: 'ai-assistant', label: 'AI Assistant', icon: Sparkles },
     { id: 'documents', label: 'Documents', icon: FileText },
