@@ -39,6 +39,11 @@ export function AIAssistant() {
       prompt: 'Analyze performance metrics and identify topics with degraded performance or high consumer lag',
       icon: <RefreshCw className="w-4 h-4" />,
     },
+    {
+      label: 'Get Recommendations',
+      prompt: 'Based on all the current data, provide me with prioritized recommendations for what actions to take. Include priority scores, impact analysis, and specific action items.',
+      icon: <Sparkles className="w-4 h-4" />,
+    },
   ];
 
   useEffect(() => {
@@ -217,7 +222,24 @@ export function AIAssistant() {
       }
 
       context += '=== END OF DASHBOARD DATA ===\n';
-      context += 'You have access to all the above data. Use it to provide detailed, data-driven answers.\n';
+      context += 'You have access to all the above data. Use it to provide detailed, data-driven answers.\n\n';
+      context += '=== RECOMMENDATION GUIDELINES ===\n';
+      context += 'When asked for recommendations, structure your response as follows:\n\n';
+      context += '1. PRIORITY SCORE (1-10): Assess urgency and impact\n';
+      context += '2. CATEGORY: Alert Management | Performance Tuning | Incident Response | Architecture | Compliance\n';
+      context += '3. ISSUE: Clearly describe the problem or opportunity\n';
+      context += '4. IMPACT: Business and technical consequences\n';
+      context += '5. ACTION ITEMS: Specific, actionable steps\n';
+      context += '6. ESTIMATED EFFORT: Quick Win (<1 day) | Medium (1-3 days) | Strategic (>3 days)\n';
+      context += '7. DEPENDENCIES: What needs to happen first\n\n';
+      context += 'Focus on:\n';
+      context += '- Critical/high severity unresolved alerts\n';
+      context += '- Performance degradation patterns\n';
+      context += '- Incident trends and root causes\n';
+      context += '- Naming convention violations\n';
+      context += '- Cross-environment inconsistencies\n';
+      context += '- On-call workload distribution issues\n';
+      context += '- Topic lineage gaps or misconfigurations\n';
 
       return context;
     } catch (err) {
@@ -313,7 +335,7 @@ export function AIAssistant() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {quickActions.map((action, idx) => (
                 <button
                   key={idx}
