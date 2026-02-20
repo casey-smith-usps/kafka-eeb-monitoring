@@ -25,18 +25,18 @@ export function AIAssistant() {
 
   const quickActions: QuickAction[] = [
     {
-      label: 'Analyze Recent Alerts',
-      prompt: 'Analyze the most recent critical alerts and provide insights',
-      icon: <AlertCircle className="w-4 h-4" />,
-    },
-    {
-      label: 'Topic Health Summary',
-      prompt: 'Give me a summary of Kafka topic health across all environments',
+      label: 'Dashboard Summary',
+      prompt: 'Give me a comprehensive summary of the entire dashboard including alerts, topics, incidents, and performance metrics',
       icon: <Database className="w-4 h-4" />,
     },
     {
-      label: 'Incident Trends',
-      prompt: 'What are the common patterns in recent incidents?',
+      label: 'Critical Issues',
+      prompt: 'What are the most critical issues right now that need immediate attention?',
+      icon: <AlertCircle className="w-4 h-4" />,
+    },
+    {
+      label: 'Performance Analysis',
+      prompt: 'Analyze performance metrics and identify topics with degraded performance or high consumer lag',
       icon: <RefreshCw className="w-4 h-4" />,
     },
   ];
@@ -47,43 +47,177 @@ export function AIAssistant() {
 
   const fetchContextData = async () => {
     try {
-      const [alertsResult, topicsResult] = await Promise.all([
+      const [
+        alertsResult,
+        topicsResult,
+        incidentsResult,
+        performanceResult,
+        lineageResult,
+        oncallResult
+      ] = await Promise.all([
         supabase
           .from('alerts')
-          .select('alert_type, severity, environment, status')
+          .select('*')
           .order('created_at', { ascending: false })
-          .limit(10)
-          .then(res => res.error ? { data: [], error: res.error } : res),
+          .limit(50),
         supabase
           .from('topics')
-          .select('name, environment, cloud_provider, status')
+          .select('*')
           .order('created_at', { ascending: false })
-          .limit(20)
-          .then(res => res.error ? { data: [], error: res.error } : res),
+          .limit(100),
+        supabase
+          .from('alerts')
+          .select('*')
+          .not('incident_number', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(30),
+        supabase
+          .from('performance_metrics')
+          .select('*, topics(name, environment)')
+          .order('timestamp', { ascending: false })
+          .limit(50),
+        supabase
+          .from('topic_lineage')
+          .select('*, source:source_topic_id(name), target:target_topic_id(name)')
+          .limit(50),
+        supabase
+          .from('oncall_rotation')
+          .select('*')
+          .order('start_date', { ascending: false })
+          .limit(5),
       ]);
 
-      let context = 'Current System State:\n\n';
+      let context = 'COMPREHENSIVE DASHBOARD DATA:\n\n';
 
+      // Alerts Summary
       if (alertsResult.data && alertsResult.data.length > 0) {
-        context += 'Recent Alerts:\n';
-        alertsResult.data.forEach((alert, idx) => {
-          context += `${idx + 1}. ${alert.alert_type} - ${alert.severity} (${alert.environment}) - ${alert.status}\n`;
+        context += '=== ALERTS OVERVIEW ===\n';
+        const totalAlerts = alertsResult.data.length;
+        const criticalAlerts = alertsResult.data.filter(a => a.severity === 'critical').length;
+        const highAlerts = alertsResult.data.filter(a => a.severity === 'high').length;
+        const unresolvedAlerts = alertsResult.data.filter(a => !a.resolved).length;
+
+        context += `Total Alerts: ${totalAlerts}\n`;
+        context += `Critical: ${criticalAlerts} | High: ${highAlerts} | Unresolved: ${unresolvedAlerts}\n\n`;
+
+        context += 'Recent Critical/High Alerts:\n';
+        alertsResult.data
+          .filter(a => ['critical', 'high'].includes(a.severity) && !a.resolved)
+          .slice(0, 10)
+          .forEach((alert, idx) => {
+            context += `${idx + 1}. [${alert.severity.toUpperCase()}] ${alert.title}\n`;
+            context += `   Type: ${alert.alert_type} | Created: ${new Date(alert.created_at).toLocaleDateString()}\n`;
+            if (alert.description) context += `   Description: ${alert.description}\n`;
+            if (alert.incident_number) context += `   Incident: ${alert.incident_number}\n`;
+          });
+        context += '\n';
+      }
+
+      // Topics Summary
+      if (topicsResult.data && topicsResult.data.length > 0) {
+        context += '=== KAFKA TOPICS OVERVIEW ===\n';
+        const totalTopics = topicsResult.data.length;
+        const envGroups = topicsResult.data.reduce((acc, topic) => {
+          const env = topic.environment || 'unknown';
+          if (!acc[env]) acc[env] = { total: 0, complete: 0, in_progress: 0, naming_issues: 0 };
+          acc[env].total++;
+          if (topic.status === 'complete') acc[env].complete++;
+          if (topic.status === 'in_progress') acc[env].in_progress++;
+          if (topic.naming_issues) acc[env].naming_issues++;
+          return acc;
+        }, {} as Record<string, any>);
+
+        context += `Total Topics: ${totalTopics}\n\n`;
+        context += 'By Environment:\n';
+        Object.entries(envGroups).forEach(([env, stats]) => {
+          context += `${env.toUpperCase()}: ${stats.total} topics (Complete: ${stats.complete}, In Progress: ${stats.in_progress}, Naming Issues: ${stats.naming_issues})\n`;
+        });
+
+        const cloudProviders = topicsResult.data.reduce((acc, t) => {
+          const provider = t.cloud_provider || 'unknown';
+          acc[provider] = (acc[provider] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        context += '\nBy Cloud Provider:\n';
+        Object.entries(cloudProviders).forEach(([provider, count]) => {
+          context += `${provider}: ${count} topics\n`;
         });
         context += '\n';
       }
 
-      if (topicsResult.data && topicsResult.data.length > 0) {
-        context += 'Kafka Topics:\n';
-        const envGroups = topicsResult.data.reduce((acc, topic) => {
-          if (!acc[topic.environment]) acc[topic.environment] = 0;
-          acc[topic.environment]++;
+      // Incidents Summary
+      if (incidentsResult.data && incidentsResult.data.length > 0) {
+        context += '=== SERVICENOW INCIDENTS ===\n';
+        const openIncidents = incidentsResult.data.filter(i => !i.resolved);
+        context += `Active Incidents: ${openIncidents.length}\n\n`;
+
+        openIncidents.slice(0, 10).forEach((incident, idx) => {
+          context += `${idx + 1}. ${incident.incident_number} - ${incident.title}\n`;
+          context += `   Priority: P${incident.priority} | Business Service: ${incident.business_service || 'N/A'}\n`;
+          context += `   Category: ${incident.category || 'N/A'}\n`;
+          if (incident.functional_impact) context += `   Impact: ${incident.functional_impact}\n`;
+        });
+        context += '\n';
+      }
+
+      // Performance Metrics
+      if (performanceResult.data && performanceResult.data.length > 0) {
+        context += '=== PERFORMANCE METRICS (Recent) ===\n';
+        const metricsWithIssues = performanceResult.data.filter(m =>
+          (m.error_rate && m.error_rate > 5) ||
+          (m.consumer_lag && m.consumer_lag > 10000)
+        );
+
+        if (metricsWithIssues.length > 0) {
+          context += `Topics with Performance Issues: ${metricsWithIssues.length}\n\n`;
+          metricsWithIssues.slice(0, 10).forEach((metric, idx) => {
+            context += `${idx + 1}. ${metric.topics?.name} (${metric.topics?.environment})\n`;
+            if (metric.error_rate > 5) context += `   ⚠️ Error Rate: ${metric.error_rate}%\n`;
+            if (metric.consumer_lag > 10000) context += `   ⚠️ Consumer Lag: ${metric.consumer_lag} messages\n`;
+            if (metric.messages_per_second) context += `   Throughput: ${metric.messages_per_second} msg/s\n`;
+          });
+        } else {
+          context += 'No significant performance issues detected\n';
+        }
+        context += '\n';
+      }
+
+      // Topic Lineage
+      if (lineageResult.data && lineageResult.data.length > 0) {
+        context += '=== TOPIC LINEAGE ===\n';
+        context += `Total Lineage Relationships: ${lineageResult.data.length}\n`;
+        const relationshipTypes = lineageResult.data.reduce((acc, l) => {
+          acc[l.relationship_type] = (acc[l.relationship_type] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
-
-        Object.entries(envGroups).forEach(([env, count]) => {
-          context += `- ${env}: ${count} topics\n`;
+        Object.entries(relationshipTypes).forEach(([type, count]) => {
+          context += `${type}: ${count}\n`;
         });
+        context += '\n';
       }
+
+      // On-Call Rotation
+      if (oncallResult.data && oncallResult.data.length > 0) {
+        context += '=== ON-CALL ROTATION ===\n';
+        const currentRotation = oncallResult.data.find(r => {
+          const now = new Date();
+          const start = new Date(r.start_date);
+          const end = new Date(r.end_date);
+          return now >= start && now <= end;
+        });
+
+        if (currentRotation) {
+          context += 'Current On-Call:\n';
+          context += `Primary: ${currentRotation.primary_name}\n`;
+          context += `Secondary: ${currentRotation.secondary_name}\n`;
+          context += `Tertiary: ${currentRotation.tertiary_name}\n`;
+          context += `Period: ${new Date(currentRotation.start_date).toLocaleDateString()} - ${new Date(currentRotation.end_date).toLocaleDateString()}\n`;
+        }
+        context += '\n';
+      }
+
+      context += '=== END OF DASHBOARD DATA ===\n';
+      context += 'You have access to all the above data. Use it to provide detailed, data-driven answers.\n';
 
       return context;
     } catch (err) {
@@ -175,7 +309,7 @@ export function AIAssistant() {
                 How can I help you today?
               </h2>
               <p className="text-slate-600">
-                Ask me about your Kafka topics, incidents, alerts, or system health
+                I can see all your dashboard data including alerts, topics, incidents, performance metrics, lineage, and on-call rotation
               </p>
             </div>
 
