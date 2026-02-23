@@ -21,7 +21,12 @@ export function AIAssistant() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimitInfo, setRateLimitInfo] = useState<string | null>(null);
+  const [requestsRemaining, setRequestsRemaining] = useState(5);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastRequestTime = useRef<number>(0);
+  const requestCount = useRef<number>(0);
+  const resetTime = useRef<number>(Date.now());
 
   const quickActions: QuickAction[] = [
     {
@@ -248,9 +253,47 @@ export function AIAssistant() {
     }
   };
 
+  const checkRateLimit = (): { allowed: boolean; waitTime?: number } => {
+    const now = Date.now();
+    const RATE_LIMIT_WINDOW = 60000;
+    const MAX_REQUESTS_PER_MINUTE = 5;
+    const MIN_TIME_BETWEEN_REQUESTS = 3000;
+
+    if (now - resetTime.current > RATE_LIMIT_WINDOW) {
+      requestCount.current = 0;
+      resetTime.current = now;
+      setRequestsRemaining(MAX_REQUESTS_PER_MINUTE);
+    }
+
+    const timeSinceLastRequest = now - lastRequestTime.current;
+    if (timeSinceLastRequest < MIN_TIME_BETWEEN_REQUESTS) {
+      const waitTime = MIN_TIME_BETWEEN_REQUESTS - timeSinceLastRequest;
+      return { allowed: false, waitTime };
+    }
+
+    if (requestCount.current >= MAX_REQUESTS_PER_MINUTE) {
+      const timeUntilReset = RATE_LIMIT_WINDOW - (now - resetTime.current);
+      return { allowed: false, waitTime: timeUntilReset };
+    }
+
+    return { allowed: true };
+  };
+
   const handleSend = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
     if (!textToSend || isLoading) return;
+
+    const rateLimitCheck = checkRateLimit();
+    if (!rateLimitCheck.allowed) {
+      const seconds = Math.ceil((rateLimitCheck.waitTime || 0) / 1000);
+      setRateLimitInfo(`Please wait ${seconds} seconds before sending another message to avoid rate limits.`);
+      setTimeout(() => setRateLimitInfo(null), rateLimitCheck.waitTime);
+      return;
+    }
+
+    lastRequestTime.current = Date.now();
+    requestCount.current += 1;
+    setRequestsRemaining(5 - requestCount.current);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -263,6 +306,7 @@ export function AIAssistant() {
     setInput('');
     setIsLoading(true);
     setError(null);
+    setRateLimitInfo(null);
 
     try {
       const context = await fetchContextData();
@@ -425,8 +469,26 @@ export function AIAssistant() {
         </div>
       )}
 
+      {rateLimitInfo && (
+        <div className="px-6 pb-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-2 text-amber-700">
+            <AlertCircle className="w-5 h-5" />
+            <span className="text-sm">{rateLimitInfo}</span>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border-t border-slate-200 p-6">
         <div className="max-w-4xl mx-auto">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="flex-1"></div>
+            <div className="text-xs text-slate-500 flex items-center gap-2">
+              <span>Rate Limit: {requestsRemaining}/5 per minute</span>
+              {requestsRemaining <= 2 && (
+                <span className="text-amber-600 font-medium">Wait 3s between requests</span>
+              )}
+            </div>
+          </div>
           <div className="flex gap-3">
             <input
               type="text"
