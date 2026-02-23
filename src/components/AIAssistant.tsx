@@ -123,7 +123,7 @@ export function AIAssistant() {
         context += '\n';
       }
 
-      // Topics Summary
+      // Topics Summary with Full Details
       if (topicsResult.data && topicsResult.data.length > 0) {
         context += '=== KAFKA TOPICS OVERVIEW ===\n';
         const totalTopics = topicsResult.data.length;
@@ -153,6 +153,26 @@ export function AIAssistant() {
           context += `${provider}: ${count} topics\n`;
         });
         context += '\n';
+
+        context += '=== DETAILED TOPICS LIST ===\n';
+        context += 'Below is the complete list of all Kafka topics with full details:\n\n';
+        topicsResult.data.forEach((topic, idx) => {
+          context += `${idx + 1}. ${topic.name}\n`;
+          context += `   Environment: ${topic.environment} | Cloud: ${topic.cloud_provider || 'N/A'} | Cluster: ${topic.cluster || 'N/A'}\n`;
+          context += `   Status: ${topic.status} | Owner: ${topic.owner || 'N/A'}\n`;
+          if (topic.description) context += `   Description: ${topic.description}\n`;
+          if (topic.business_capability) context += `   Business Capability: ${topic.business_capability}\n`;
+          if (topic.data_classification) context += `   Data Classification: ${topic.data_classification}\n`;
+          if (topic.schema_registry_subject) context += `   Schema Subject: ${topic.schema_registry_subject}\n`;
+          if (topic.schema_version) context += `   Schema Version: ${topic.schema_version}\n`;
+          if (topic.icd_number) context += `   ICD Number: ${topic.icd_number}\n`;
+          if (topic.icd_description) context += `   ICD Description: ${topic.icd_description}\n`;
+          if (topic.naming_issues) context += `   ⚠️ Naming Issues: ${topic.naming_validation_details || 'Yes'}\n`;
+          if (topic.partition_count) context += `   Partitions: ${topic.partition_count} | Replication: ${topic.replication_factor || 'N/A'}\n`;
+          if (topic.retention_ms) context += `   Retention: ${Math.floor(topic.retention_ms / 86400000)} days\n`;
+          if (topic.source_system) context += `   Source System: ${topic.source_system}\n`;
+          context += '\n';
+        });
       }
 
       // Incidents Summary
@@ -226,8 +246,22 @@ export function AIAssistant() {
         context += '\n';
       }
 
-      context += '=== END OF DASHBOARD DATA ===\n';
-      context += 'You have access to all the above data. Use it to provide detailed, data-driven answers.\n\n';
+      context += '=== END OF DASHBOARD DATA ===\n\n';
+      context += '=== YOUR CAPABILITIES ===\n';
+      context += 'You are an expert Kafka platform assistant with FULL ACCESS to the complete dashboard database.\n\n';
+      context += 'IMPORTANT: You can see ALL topics with their complete details including:\n';
+      context += '- Topic names, descriptions, owners\n';
+      context += '- Schema information (registry subjects, versions, ICD numbers)\n';
+      context += '- Configuration (partitions, replication, retention)\n';
+      context += '- Environment, cloud provider, cluster information\n';
+      context += '- Naming validation issues and recommendations\n';
+      context += '- Business capabilities and data classifications\n\n';
+      context += 'When users ask about specific topics (e.g., "EMAS topics", "payment topics"), you MUST:\n';
+      context += '1. Search through the DETAILED TOPICS LIST above for matching names\n';
+      context += '2. Provide specific details about those topics\n';
+      context += '3. Offer schema analysis, configuration recommendations, and architectural advice\n';
+      context += '4. Help with schema evolution, retention tuning, partition planning\n';
+      context += '5. Identify related topics, lineage, and dependencies\n\n';
       context += '=== RECOMMENDATION GUIDELINES ===\n';
       context += 'When asked for recommendations, structure your response as follows:\n\n';
       context += '1. PRIORITY SCORE (1-10): Assess urgency and impact\n';
@@ -375,7 +409,7 @@ export function AIAssistant() {
                 How can I help you today?
               </h2>
               <p className="text-slate-600">
-                I can see all your dashboard data including alerts, topics, incidents, performance metrics, lineage, and on-call rotation
+                I have full access to your Kafka platform database with complete details on all topics, schemas, alerts, incidents, performance metrics, lineage, and on-call rotation. Ask me about specific topics, schema changes, recommendations, or anything else!
               </p>
             </div>
 
