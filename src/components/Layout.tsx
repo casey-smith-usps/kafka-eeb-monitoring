@@ -9,8 +9,12 @@ import {
   Network,
   Phone,
   Sparkles,
-  Radio
+  Radio,
+  LogOut,
+  User,
+  Shield
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -19,18 +23,24 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, currentView, onViewChange }: LayoutProps) {
+  const { user, userRole, isAdmin, signOut } = useAuth();
+
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'topics', label: 'All Topics', icon: ListChecks },
     { id: 'standup', label: 'Morning Standup', icon: Activity },
     { id: 'alerts', label: 'Alerts', icon: AlertCircle },
     { id: 'lineage', label: 'Topic Lineage', icon: GitBranch },
-    { id: 'streaming', label: 'Data Streaming', icon: Radio },
+    { id: 'streaming', label: 'Data Streaming', icon: Radio, adminOnly: true },
     { id: 'oncall', label: 'On-Call & Escalation', icon: Phone },
     { id: 'ai-assistant', label: 'AI Assistant', icon: Sparkles },
     { id: 'documents', label: 'Documents', icon: FileText },
     { id: 'architecture', label: 'Architecture', icon: Network },
   ];
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -47,15 +57,46 @@ export default function Layout({ children, currentView, onViewChange }: LayoutPr
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-slate-700">
-                  {new Date().toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </p>
+              <div className="flex items-center space-x-4 border-r border-slate-200 pr-4">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-slate-700">
+                    {new Date().toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    {user?.email}
+                  </p>
+                  <p className="text-xs text-slate-500 flex items-center gap-1 justify-end mt-0.5">
+                    {isAdmin ? (
+                      <>
+                        <Shield className="w-3 h-3 text-blue-600" />
+                        <span className="text-blue-600 font-medium">Administrator</span>
+                      </>
+                    ) : (
+                      <>
+                        <User className="w-3 h-3 text-slate-600" />
+                        <span>Viewer</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors duration-200"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>
@@ -68,6 +109,10 @@ export default function Layout({ children, currentView, onViewChange }: LayoutPr
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentView === item.id;
+              const isHidden = item.adminOnly && !isAdmin;
+
+              if (isHidden) return null;
+
               return (
                 <button
                   key={item.id}
@@ -80,6 +125,9 @@ export default function Layout({ children, currentView, onViewChange }: LayoutPr
                 >
                   <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
                   <span>{item.label}</span>
+                  {item.adminOnly && (
+                    <Shield className="w-3 h-3 text-blue-600 ml-auto" title="Admin Only" />
+                  )}
                 </button>
               );
             })}

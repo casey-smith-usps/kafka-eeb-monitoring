@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Login from './components/Login';
+import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import DashboardOverview from './components/DashboardOverview';
 import TopicsOverview from './components/TopicsOverview';
@@ -16,13 +19,18 @@ import { AIAssistant } from './components/AIAssistant';
 import { DataStreaming } from './components/DataStreaming';
 import { Topic } from './lib/supabase';
 
-function App() {
+function DashboardApp() {
+  const { user, userRole } = useAuth();
   const [currentView, setCurrentView] = useState('overview');
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [showExcelImport, setShowExcelImport] = useState(false);
   const [showKafkaSync, setShowKafkaSync] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
+
+  if (!user || !userRole) {
+    return null;
+  }
 
   const handleAddTopic = () => {
     setEditingTopic(null);
@@ -93,7 +101,11 @@ function App() {
       case 'lineage':
         return <TopicLineage />;
       case 'streaming':
-        return <DataStreaming />;
+        return (
+          <ProtectedRoute requireAdmin={true}>
+            <DataStreaming />
+          </ProtectedRoute>
+        );
       case 'oncall':
         return <OnCallEscalation />;
       case 'documents':
@@ -135,6 +147,39 @@ function App() {
         }}
       />
     </>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const { user, userRole, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !userRole) {
+    return <Login />;
+  }
+
+  return (
+    <ProtectedRoute>
+      <DashboardApp />
+    </ProtectedRoute>
   );
 }
 
