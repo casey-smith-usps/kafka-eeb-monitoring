@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -7,7 +7,24 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+function createSupabaseClient(): SupabaseClient {
+  const token = localStorage.getItem('access_token') || '';
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        'X-Access-Token': token
+      }
+    }
+  });
+}
+
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(target, prop) {
+    const client = createSupabaseClient();
+    return (client as any)[prop];
+  }
+});
 
 export type Topic = {
   id: string;

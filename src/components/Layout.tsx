@@ -1,20 +1,7 @@
-import { ReactNode } from 'react';
-import {
-  LayoutDashboard,
-  ListChecks,
-  AlertCircle,
-  GitBranch,
-  Activity,
-  FileText,
-  Network,
-  Phone,
-  Sparkles,
-  Radio,
-  LogOut,
-  User,
-  Shield
-} from 'lucide-react';
+import { ReactNode, useEffect, useState } from 'react';
+import { LayoutDashboard, ListChecks, AlertCircle, GitBranch, Activity, FileText, Network, Phone, Sparkles, Radio, LogOut, User, Shield, Users, CreditCard as Edit3, Database, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface LayoutProps {
   children: ReactNode;
@@ -23,19 +10,58 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, currentView, onViewChange }: LayoutProps) {
-  const { user, userRole, isAdmin, signOut } = useAuth();
+  const { user, userProfile, isAdmin, signOut } = useAuth();
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchPendingRequestsCount();
+
+      const subscription = supabase
+        .channel('access_requests_changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'access_requests'
+        }, () => {
+          fetchPendingRequestsCount();
+        })
+        .subscribe();
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [isAdmin]);
+
+  const fetchPendingRequestsCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('access_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      if (!error && count !== null) {
+        setPendingRequestsCount(count);
+      }
+    } catch (err) {
+      console.error('Error fetching pending requests count:', err);
+    }
+  };
 
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'topics', label: 'All Topics', icon: ListChecks },
     { id: 'standup', label: 'Morning Standup', icon: Activity },
     { id: 'alerts', label: 'Alerts', icon: AlertCircle },
-    { id: 'lineage', label: 'Topic Lineage', icon: GitBranch },
+    { id: 'lineage', label: 'Cross-System Lineage', icon: GitBranch },
+    { id: 'data-freshness', label: 'Data Freshness', icon: Clock },
     { id: 'streaming', label: 'Data Streaming', icon: Radio, adminOnly: true },
     { id: 'oncall', label: 'On-Call & Escalation', icon: Phone },
     { id: 'ai-assistant', label: 'AI Assistant', icon: Sparkles },
     { id: 'documents', label: 'Documents', icon: FileText },
     { id: 'architecture', label: 'Architecture', icon: Network },
+    { id: 'users', label: 'User Management', icon: Users, adminOnly: true },
   ];
 
   const handleSignOut = async () => {
@@ -77,10 +103,15 @@ export default function Layout({ children, currentView, onViewChange }: LayoutPr
                     {user?.email}
                   </p>
                   <p className="text-xs text-slate-500 flex items-center gap-1 justify-end mt-0.5">
-                    {isAdmin ? (
+                    {userProfile?.role === 'admin' ? (
                       <>
-                        <Shield className="w-3 h-3 text-blue-600" />
-                        <span className="text-blue-600 font-medium">Administrator</span>
+                        <Shield className="w-3 h-3 text-red-600" />
+                        <span className="text-red-600 font-medium">Administrator</span>
+                      </>
+                    ) : userProfile?.role === 'editor' ? (
+                      <>
+                        <Edit3 className="w-3 h-3 text-blue-600" />
+                        <span className="text-blue-600 font-medium">Editor</span>
                       </>
                     ) : (
                       <>
@@ -124,9 +155,14 @@ export default function Layout({ children, currentView, onViewChange }: LayoutPr
                   }`}
                 >
                   <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
-                  {item.adminOnly && (
-                    <Shield className="w-3 h-3 text-blue-600 ml-auto" title="Admin Only" />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.id === 'users' && pendingRequestsCount > 0 && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-600 rounded-full animate-pulse">
+                      {pendingRequestsCount}
+                    </span>
+                  )}
+                  {item.adminOnly && item.id !== 'users' && (
+                    <Shield className="w-3 h-3 text-blue-600" title="Admin Only" />
                   )}
                 </button>
               );
