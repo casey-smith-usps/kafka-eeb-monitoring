@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Template - Proposed Architecture</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
+
+        .email-box {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        .email-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .email-field {
+            margin-bottom: 8px;
+            color: #495057;
+        }
+
+        .email-field strong {
+            display: inline-block;
+            width: 80px;
+            color: #212529;
+        }
+
+        .email-body {
+            color: #212529;
+            font-size: 14px;
+        }
+
+        .email-body p {
+            margin-bottom: 15px;
+        }
+
+        .email-body ul, .email-body ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+
+        .email-body li {
+            margin-bottom: 8px;
+        }
+
+        .highlight {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .action-box {
+            background: #d1ecf1;
+            border: 2px solid #0c5460;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .action-box h4 {
+            color: #0c5460;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .alternative {
+            margin-top: 40px;
+            padding-top: 40px;
+            border-top: 2px solid #dee2e6;
+        }
+
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #e83e8c;
+        }
+
+        .signature {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #6c757d;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 Ready-to-Send Email Templates</h1>
+
+        <div class="email-box">
+            <div class="email-header">
+                <div class="email-field"><strong>To:</strong> [CCC Team Lead], [EEB Governance], [Manager]</div>
+                <div class="email-field"><strong>Cc:</strong> [PTR2 Team], [MyPO Team], [MDDC Contact]</div>
+                <div class="email-field"><strong>Subject:</strong> Proposed Hold Mail Architecture - Topic Governance Clarification</div>
+            </div>
+
+            <div class="email-body">
+                <p>Hi Team,</p>
+
+                <p>Following up on the Hold Mail ingestion architecture discussions and the duplicate data concern raised by EEB governance, I'd like to propose a clean solution that maintains CASI's approved flow while establishing clear topic-of-record guidelines.</p>
+
+                <div class="highlight">
+                    <strong>Core Issue:</strong> Manual Hold Mail events from MDDC will appear in both <code>EEB.Inbound</code> and <code>CCC.EEB.Inbound</code>, creating ambiguity for downstream consumers and violating EEB's single-source-of-truth principle.
+                </div>
+
+                <p><strong>Proposed Architecture:</strong></p>
+
+                <ol>
+                    <li><strong>MDDC publishes</strong> manual Hold Mail records → <code>MDDC.EEB.HoldMail.Manual</code>
+                        <ul>
+                            <li>Clear naming signals this is raw MDDC data</li>
+                            <li>Marked as internal-only (not for direct consumer access)</li>
+                        </ul>
+                    </li>
+
+                    <li><strong>CCC consumes</strong> from <code>MDDC.EEB.HoldMail.Manual</code>
+                        <ul>
+                            <li>Merges with Online (USPS.COM) and Call Center (1-800) requests</li>
+                            <li>Performs deduplication and enrichment</li>
+                        </ul>
+                    </li>
+
+                    <li><strong>CCC publishes</strong> consolidated data → <code>CCC.EEB.HoldMail.All</code>
+                        <ul>
+                            <li>Contains ALL Hold Mail requests from all sources</li>
+                            <li>Designated as authoritative topic-of-record</li>
+                        </ul>
+                    </li>
+
+                    <li><strong>Downstream consumers</strong> (PTR2, MyPO, Process Hub) subscribe ONLY to <code>CCC.EEB.HoldMail.All</code>
+                        <ul>
+                            <li>No duplicate processing</li>
+                            <li>No need for consumer-side deduplication</li>
+                            <li>Clear audit trail</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <div class="action-box">
+                    <h4>📊 Visual Flow Diagram</h4>
+                    <p>I've created a flow diagram showing this architecture. Please see the attached file: <code>hold-mail-flow.html</code></p>
+                    <p>Open it in any browser to view the interactive diagram.</p>
+                </div>
+
+                <p><strong>Key Benefits:</strong></p>
+                <ul>
+                    <li>✅ <strong>No Duplication:</strong> Each Hold Mail event exists in only one consumer-facing topic</li>
+                    <li>✅ <strong>Clear Topic-of-Record:</strong> CCC.EEB.HoldMail.All is explicitly documented as authoritative</li>
+                    <li>✅ <strong>Centralized Deduplication:</strong> CCC handles merging logic once, not N times by consumers</li>
+                    <li>✅ <strong>EEB Compliance:</strong> Aligns with governance principles for topic management</li>
+                    <li>✅ <strong>Clean Lineage:</strong> MDDC → EEB → CCC → EEB → Consumers (traceable flow)</li>
+                </ul>
+
+                <p><strong>What This Changes from Current Plan:</strong></p>
+                <ul>
+                    <li>Topic naming (configuration change, not code refactor)</li>
+                    <li>Consumption guidelines (documentation + access control)</li>
+                    <li>Topic-of-record designation (governance policy)</li>
+                </ul>
+
+                <p><strong>What This Doesn't Change:</strong></p>
+                <ul>
+                    <li>CASI-approved data flow</li>
+                    <li>MDDC integration code</li>
+                    <li>CCC merge logic</li>
+                    <li>Consumer processing logic</li>
+                </ul>
+
+                <div class="highlight">
+                    <strong>Request:</strong> Can we schedule a 30-minute working session this week to review the flow diagram and align on this approach? I believe this prevents downstream confusion while maintaining the timeline.
+                </div>
+
+                <p><strong>Questions to Align On:</strong></p>
+                <ol>
+                    <li>Does CCC agree to publish to <code>CCC.EEB.HoldMail.All</code> as the consolidated topic?</li>
+                    <li>Can EEB governance confirm this addresses the duplication concern?</li>
+                    <li>Are downstream teams comfortable subscribing only to the CCC topic?</li>
+                    <li>What fields should be added to the schema to support source system tracking? (I recommend: <code>SOURCE_SYSTEM</code>, <code>EVENT_ID</code>, <code>DEDUPE_SOURCES</code>)</li>
+                </ol>
+
+                <p>I'm happy to draft the Topic Contract Document and consumption guidelines once we align on this approach.</p>
+
+                <p>Best,<br>Casey</p>
+
+                <div class="signature">
+                    <p>Attachments:</p>
+                    <ul>
+                        <li>hold-mail-flow.html (architecture diagram)</li>
+                        <li>qa-document.html (detailed Q&A for technical clarifications)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="alternative">
+            <h2>📧 Alternative: Shorter Version (If You Need to Be More Concise)</h2>
+
+            <div class="email-box">
+                <div class="email-header">
+                    <div class="email-field"><strong>To:</strong> [CCC Team Lead], [EEB Governance], [Manager]</div>
+                    <div class="email-field"><strong>Subject:</strong> Hold Mail Topic Governance - Quick Clarification Needed</div>
+                </div>
+
+                <div class="email-body">
+                    <p>Hi Team,</p>
+
+                    <p>Quick question on the Hold Mail architecture to address EEB's duplication concern:</p>
+
+                    <p><strong>Current State:</strong> MDDC manual holds flow through <code>EEB.Inbound</code>, then CCC merges them and publishes to <code>CCC.EEB.Inbound</code>. This creates duplicate events in two topics.</p>
+
+                    <p><strong>Proposed Fix:</strong></p>
+                    <ol>
+                        <li>Rename <code>EEB.Inbound</code> → <code>MDDC.EEB.HoldMail.Manual</code> (mark as internal-only)</li>
+                        <li>Designate <code>CCC.EEB.HoldMail.All</code> as topic-of-record</li>
+                        <li>Downstream consumers subscribe ONLY to CCC topic</li>
+                    </ol>
+
+                    <p>This is a naming/documentation change, not a code refactor. Attached is a flow diagram.</p>
+
+                    <p><strong>Can we align on this by [DATE]?</strong> I'll draft the topic contract once confirmed.</p>
+
+                    <p>Thanks,<br>Casey</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px; padding: 20px; background: #e7f3ff; border-radius: 8px;">
+            <h3 style="color: #0066cc; margin-bottom: 10px;">💡 Pro Tips</h3>
+            <ul style="margin-left: 20px; color: #495057;">
+                <li>Attach <code>hold-mail-flow.html</code> to your email - visuals cut through confusion</li>
+                <li>Send during business hours (Tuesday-Thursday 9am-11am for best response)</li>
+                <li>Follow up if no response in 48 hours</li>
+                <li>If you get pushback, reference the detailed Q&A document</li>
+                <li>Frame this as "governance enhancement" not "challenging CASI"</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</body>
+</html>

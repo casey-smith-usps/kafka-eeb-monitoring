@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hold Mail Data Flow - Proposed Architecture</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, Calibri, sans-serif;
+            background: white;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #000;
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .flow-diagram {
+            border: 2px solid #000;
+            margin-bottom: 40px;
+        }
+
+        .flow-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .flow-table th {
+            background: #FF6B35;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 13px;
+            border: 1px solid #000;
+        }
+
+        .flow-table td {
+            padding: 15px 12px;
+            border: 1px solid #000;
+            font-size: 12px;
+            vertical-align: top;
+        }
+
+        .flow-row-header {
+            background: #FFE5E5;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .source-system {
+            background: #E8F4F8;
+        }
+
+        .eeb-topic {
+            background: #FFF4E6;
+        }
+
+        .ccc-process {
+            background: #E8F8E8;
+        }
+
+        .consumer {
+            background: #F0E8FF;
+        }
+
+        .highlight-yellow {
+            background: #FFFF99;
+        }
+
+        .highlight-green {
+            background: #90EE90;
+        }
+
+        .arrow-cell {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            padding: 10px;
+            background: #F5F5F5;
+        }
+
+        .detail-box {
+            background: white;
+            border: 2px solid #ccc;
+            padding: 10px;
+            margin-top: 5px;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .governance-box {
+            background: #FFFF99;
+            border: 3px solid #FFD700;
+            padding: 20px;
+            margin: 30px 0;
+        }
+
+        .governance-box h2 {
+            color: #000;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .governance-box p {
+            color: #000;
+            line-height: 1.6;
+            font-size: 13px;
+        }
+
+        .benefits-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+
+        .benefits-table th {
+            background: #90EE90;
+            color: #000;
+            padding: 12px;
+            border: 1px solid #000;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .benefits-table td {
+            padding: 12px;
+            border: 1px solid #000;
+            font-size: 12px;
+            background: white;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+
+        .status-internal {
+            background: #FFB6C1;
+            color: #8B0000;
+        }
+
+        .status-authoritative {
+            background: #90EE90;
+            color: #006400;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+        }
+
+        .comparison-table th {
+            background: #4472C4;
+            color: white;
+            padding: 12px;
+            border: 1px solid #000;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .comparison-table td {
+            padding: 12px;
+            border: 1px solid #000;
+            font-size: 12px;
+            background: white;
+        }
+
+        .comparison-table .aspect-col {
+            background: #E8F4F8;
+            font-weight: bold;
+        }
+
+        ul {
+            margin-left: 20px;
+            margin-top: 5px;
+        }
+
+        ul li {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PROPOSED ARCHITECTURE: Hold Mail Data Flow - Single Source of Truth</h1>
+
+        <div class="flow-diagram">
+            <table class="flow-table">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">Step</th>
+                        <th style="width: 25%;">Component</th>
+                        <th style="width: 30%;">Description</th>
+                        <th style="width: 30%;">Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Step 1: Source Systems -->
+                    <tr>
+                        <td class="flow-row-header">STEP 1</td>
+                        <td class="source-system"><strong>SOURCE SYSTEMS</strong></td>
+                        <td class="source-system">Three independent sources generate Hold Mail requests</td>
+                        <td class="source-system">
+                            <strong>1. USPS.COM</strong> - Online customer requests<br>
+                            <strong>2. 1-800 Call Center</strong> - Phone requests<br>
+                            <strong>3. MDDC</strong> - Manual office scans (PS Form 8076)
+                        </td>
+                    </tr>
+
+                    <!-- Arrow -->
+                    <tr>
+                        <td colspan="4" class="arrow-cell">↓</td>
+                    </tr>
+
+                    <!-- Step 2: MDDC Publishes -->
+                    <tr>
+                        <td class="flow-row-header">STEP 2</td>
+                        <td class="eeb-topic">
+                            <strong>MDDC PUBLISHES TO EEB</strong>
+                            <div class="detail-box">
+                                Topic: <strong>MDDC.EEB.HoldMail.Manual</strong>
+                            </div>
+                        </td>
+                        <td class="eeb-topic">
+                            MDDC publishes manual hold mail records to dedicated EEB topic
+                            <div style="margin-top: 10px;">
+                                <span class="status-indicator status-internal">INTERNAL ONLY</span>
+                            </div>
+                        </td>
+                        <td class="eeb-topic">
+                            <strong>Key Fields:</strong>
+                            <ul>
+                                <li>CUST_NBR</li>
+                                <li>CUST_ONLINE_CHG</li>
+                                <li>BEGIN_HOLD_DATE</li>
+                                <li>END_HOLD_DATE</li>
+                                <li>DELIVERY_ADDRESS</li>
+                                <li>SOURCE_SYSTEM = "MDDC"</li>
+                            </ul>
+                            <strong>Access Control:</strong> Only CCC can subscribe
+                        </td>
+                    </tr>
+
+                    <!-- Arrow -->
+                    <tr>
+                        <td colspan="4" class="arrow-cell">↓</td>
+                    </tr>
+
+                    <!-- Step 3: CCC Consumes and Merges -->
+                    <tr>
+                        <td class="flow-row-header">STEP 3</td>
+                        <td class="ccc-process highlight-yellow">
+                            <strong>CCC PROCESSING LAYER</strong>
+                            <div class="detail-box">
+                                <strong>Consumes from:</strong><br>
+                                • MDDC.EEB.HoldMail.Manual<br>
+                                • USPS.COM internal systems<br>
+                                • 1-800 Call Center systems
+                            </div>
+                        </td>
+                        <td class="ccc-process highlight-yellow">
+                            <strong>CCC performs:</strong>
+                            <ul>
+                                <li><strong>MERGE:</strong> Combines all three sources</li>
+                                <li><strong>DEDUPLICATE:</strong> Identifies duplicate holds using composite key</li>
+                                <li><strong>ENRICH:</strong> Adds source system tags</li>
+                                <li><strong>VALIDATE:</strong> Data quality checks</li>
+                            </ul>
+                        </td>
+                        <td class="ccc-process highlight-yellow">
+                            <strong>Deduplication Strategy:</strong><br>
+                            Composite Key = customer_id + address_zip + begin_date + end_date
+                            <br><br>
+                            <strong>Priority when duplicates found:</strong>
+                            <ol>
+                                <li>USPS.COM (most complete)</li>
+                                <li>1-800 (agent verified)</li>
+                                <li>MDDC (may have OCR errors)</li>
+                            </ol>
+                            <br>
+                            <strong>New Fields Added:</strong>
+                            <ul>
+                                <li>EVENT_ID (UUID)</li>
+                                <li>SOURCE_SYSTEM</li>
+                                <li>DEDUPE_SOURCES (array)</li>
+                                <li>PROCESSED_TIMESTAMP</li>
+                            </ul>
+                        </td>
+                    </tr>
+
+                    <!-- Arrow -->
+                    <tr>
+                        <td colspan="4" class="arrow-cell">↓</td>
+                    </tr>
+
+                    <!-- Step 4: CCC Publishes Consolidated -->
+                    <tr>
+                        <td class="flow-row-header">STEP 4</td>
+                        <td class="eeb-topic highlight-green">
+                            <strong>CCC PUBLISHES TO EEB</strong>
+                            <div class="detail-box">
+                                Topic: <strong>CCC.EEB.HoldMail.All</strong>
+                            </div>
+                        </td>
+                        <td class="eeb-topic highlight-green">
+                            CCC publishes single consolidated stream with ALL Hold Mail requests
+                            <div style="margin-top: 10px;">
+                                <span class="status-indicator status-authoritative">TOPIC-OF-RECORD</span>
+                            </div>
+                        </td>
+                        <td class="eeb-topic highlight-green">
+                            <strong>This topic contains:</strong>
+                            <ul>
+                                <li>All MDDC manual requests</li>
+                                <li>All USPS.COM online requests</li>
+                                <li>All 1-800 call center requests</li>
+                            </ul>
+                            <strong>Deduplicated & Enriched</strong><br>
+                            <strong>Access:</strong> Public - All downstream consumers<br>
+                            <strong>Schema Version:</strong> v1.0
+                        </td>
+                    </tr>
+
+                    <!-- Arrow -->
+                    <tr>
+                        <td colspan="4" class="arrow-cell">↓</td>
+                    </tr>
+
+                    <!-- Step 5: Downstream Consumers -->
+                    <tr>
+                        <td class="flow-row-header">STEP 5</td>
+                        <td class="consumer">
+                            <strong>DOWNSTREAM CONSUMERS</strong>
+                        </td>
+                        <td class="consumer">
+                            All consumers subscribe ONLY to CCC.EEB.HoldMail.All
+                        </td>
+                        <td class="consumer">
+                            <strong>Consumers:</strong>
+                            <ul>
+                                <li><strong>PTR2</strong> - Package tracking routing</li>
+                                <li><strong>MyPO</strong> - Customer portal</li>
+                                <li><strong>Process Hub</strong> - Workflow automation</li>
+                                <li><strong>Other downstream systems</strong></li>
+                            </ul>
+                            <strong>⚠️ DO NOT subscribe to MDDC.EEB.HoldMail.Manual</strong>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="governance-box">
+            <h2>KEY GOVERNANCE PRINCIPLE</h2>
+            <p>
+                <strong>CCC.EEB.HoldMail.All</strong> is the SINGLE AUTHORITATIVE SOURCE for all Hold Mail requests across USPS.
+                This topic is the designated <strong>Topic-of-Record</strong> for downstream consumption. Consumers should NEVER
+                subscribe directly to MDDC.EEB.HoldMail.Manual, as this is an internal topic used only for CCC ingestion.
+            </p>
+            <p style="margin-top: 10px;">
+                <strong>Rationale:</strong> This architecture prevents duplicate event processing, establishes clear data lineage,
+                centralizes deduplication logic, and maintains EEB governance compliance.
+            </p>
+        </div>
+
+        <h1>COMPARISON: Current vs Proposed Architecture</h1>
+
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Aspect</th>
+                    <th style="width: 37.5%;">Current Design</th>
+                    <th style="width: 37.5%;">Proposed Architecture</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="aspect-col">MDDC Topic Name</td>
+                    <td>EEB.Inbound (generic)</td>
+                    <td><strong>MDDC.EEB.HoldMail.Manual</strong> (specific, descriptive)</td>
+                </tr>
+                <tr>
+                    <td class="aspect-col">CCC Output Topic</td>
+                    <td>CCC.EEB.Inbound (generic)</td>
+                    <td><strong>CCC.EEB.HoldMail.All</strong> (specific, authoritative)</td>
+                </tr>
+                <tr>
+                    <td class="aspect-col">Topic-of-Record</td>
+                    <td>⚠️ Ambiguous - consumers unsure which to use</td>
+                    <td>✅ <strong>CCC.EEB.HoldMail.All</strong> explicitly documented</td>
+                </tr>
+                <tr>
+                    <td class="aspect-col">Duplication Risk</td>
+                    <td>⚠️ HIGH - MDDC events in both EEB.Inbound and CCC.EEB.Inbound</td>
+                    <td>✅ NONE - Each event in only one consumer-facing topic</td>
+                </tr>
+                <tr>
+                    <td class="aspect-col">Deduplication Logic</td>
+                    <td>⚠️ Each consumer implements their own (5+ implementations)</td>
+                    <td>✅ Centralized in CCC (single implementation)</td>
+                </tr>
+                <tr>
+                    <td class="aspect-col">Consumer Access Pattern</td>
+                    <td>⚠️ PTR2/MyPO might subscribe to both topics</td>
+                    <td>✅ Consumers subscribe ONLY to CCC topic</td>
+                </tr>
+                <tr>
+                    <td class="aspect-col">Data Lineage</td>
+                    <td>⚠️ Unclear which topic processed by which consumer</td>
+                    <td>✅ Clear: MDDC → EEB → CCC → EEB → Consumer</td>
+                </tr>
+                <tr>
+                    <td class="aspect-col">EEB Governance Compliance</td>
+                    <td>⚠️ Violates single-source-of-truth principle</td>
+                    <td>✅ Compliant - one authoritative topic per event type</td>
+                </tr>
+                <tr>
+                    <td class="aspect-col">Implementation Effort</td>
+                    <td>Current state</td>
+                    <td>✅ <strong>Minimal:</strong> Topic naming + documentation (2 hours)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h1>BENEFITS OF PROPOSED ARCHITECTURE</h1>
+
+        <table class="benefits-table">
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Benefit</th>
+                    <th style="width: 75%;">Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>No Duplication</strong></td>
+                    <td>Each Hold Mail event exists in only ONE consumer-facing topic (CCC.EEB.HoldMail.All). Eliminates risk of double processing.</td>
+                </tr>
+                <tr>
+                    <td><strong>Clear Topic-of-Record</strong></td>
+                    <td>Downstream teams have explicit guidance on which topic is authoritative. No guesswork, no confusion.</td>
+                </tr>
+                <tr>
+                    <td><strong>Centralized Deduplication</strong></td>
+                    <td>CCC handles all merge/dedupe logic in one place. Reduces complexity for 5+ downstream consumers.</td>
+                </tr>
+                <tr>
+                    <td><strong>Clean Data Lineage</strong></td>
+                    <td>Simple, traceable flow: MDDC → EEB → CCC → EEB → Consumers. Audit-ready architecture.</td>
+                </tr>
+                <tr>
+                    <td><strong>EEB Governance Compliance</strong></td>
+                    <td>Aligns with EEB's principle of one authoritative topic per event type. Reduces governance friction.</td>
+                </tr>
+                <tr>
+                    <td><strong>Reduced Technical Debt</strong></td>
+                    <td>Prevents downstream teams from building their own deduplication logic. One place to maintain, one place to fix bugs.</td>
+                </tr>
+                <tr>
+                    <td><strong>Operational Safety</strong></td>
+                    <td>Access control on MDDC.EEB.HoldMail.Manual prevents accidental direct consumption. Monitoring alerts catch misconfigurations.</td>
+                </tr>
+                <tr>
+                    <td><strong>Schema Abstraction</strong></td>
+                    <td>CCC acts as buffer between source systems and consumers. If MDDC changes schema, CCC absorbs the change.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

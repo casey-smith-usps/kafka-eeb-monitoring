@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kafka Sync Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 8px;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    .status.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .status.info {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    pre {
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 Kafka Sync Test</h1>
+    <p class="subtitle">Test the edge function connection to your Confluent Cloud cluster</p>
+
+    <div class="form-group">
+      <label>Kafka Admin URL</label>
+      <input type="text" id="kafkaUrl" placeholder="https://pkc-xxxxx.region.provider.confluent.cloud:443">
+      <div class="hint">Your Kafka REST API endpoint</div>
+    </div>
+
+    <div class="form-group">
+      <label>Cluster ID</label>
+      <input type="text" id="clusterId" placeholder="lkc-xxxxx">
+      <div class="hint">Found in Confluent Cloud cluster settings</div>
+    </div>
+
+    <div class="form-group">
+      <label>API Key (Optional)</label>
+      <input type="text" id="apiKey" placeholder="Your API Key">
+    </div>
+
+    <div class="form-group">
+      <label>API Secret (Optional)</label>
+      <input type="password" id="apiSecret" placeholder="Your API Secret">
+      <div class="hint">Required for secured Confluent Cloud clusters</div>
+    </div>
+
+    <button id="testBtn">Test Connection & Sync Topics</button>
+
+    <div id="status"></div>
+    <div id="response"></div>
+  </div>
+
+  <script>
+    const btn = document.getElementById('testBtn');
+    const statusDiv = document.getElementById('status');
+    const responseDiv = document.getElementById('response');
+
+    btn.addEventListener('click', async () => {
+      const kafkaUrl = document.getElementById('kafkaUrl').value.trim();
+      const clusterId = document.getElementById('clusterId').value.trim();
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const apiSecret = document.getElementById('apiSecret').value.trim();
+
+      if (!kafkaUrl || !clusterId) {
+        statusDiv.innerHTML = '<div class="status error">Please enter Kafka Admin URL and Cluster ID</div>';
+        return;
+      }
+
+      btn.disabled = true;
+      statusDiv.innerHTML = '<div class="status info">🔄 Connecting to Kafka and syncing topics...</div>';
+      responseDiv.innerHTML = '';
+
+      try {
+        const supabaseUrl = 'https://dowixaqpokruwwqcykzo.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvd2l4YXFwb2tydXd3cWN5a3pvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDMwMTYsImV4cCI6MjA4NTI3OTAxNn0.L5g60FLYwAZ9IRJXDN2U6sLJHrNnF_PtHQNP5cxV0oc';
+
+        console.log('Calling:', `${supabaseUrl}/functions/v1/sync-kafka-topics`);
+
+        const response = await fetch(`${supabaseUrl}/functions/v1/sync-kafka-topics`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            kafkaAdminUrl: kafkaUrl,
+            clusterId: clusterId,
+            kafkaApiKey: apiKey || undefined,
+            kafkaApiSecret: apiSecret || undefined
+          })
+        });
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', [...response.headers.entries()]);
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          statusDiv.innerHTML = `
+            <div class="status success">
+              ✅ Success! Synced ${data.results.synced} new topics, updated ${data.results.updated} topics
+              ${data.results.failed > 0 ? `<br>⚠️ ${data.results.failed} topics failed` : ''}
+            </div>
+          `;
+        } else {
+          statusDiv.innerHTML = `<div class="status error">❌ Error: ${data.error || 'Unknown error'}</div>`;
+        }
+
+        responseDiv.innerHTML = `<strong>Full Response:</strong><pre>${JSON.stringify(data, null, 2)}</pre>`;
+      } catch (error) {
+        statusDiv.innerHTML = `<div class="status error">❌ Connection Error: ${error.message}</div>`;
+        console.error('Full error:', error);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
