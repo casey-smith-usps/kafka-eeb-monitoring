@@ -100,7 +100,11 @@ export default function Login({ onShowRequestAccess }: LoginProps) {
             <p className="text-xs text-slate-400">
               <strong className="text-slate-300">Need access?</strong>{' '}
               <button
+<<<<<<< HEAD
                 onClick={() => onShowRequestAccess?.()}
+=======
+                onClick={() => window.location.search = ''}
+>>>>>>> e9125b2b0d26e410bf42439ee467f41686918854
                 className="text-blue-400 hover:text-blue-300 underline cursor-pointer bg-transparent border-none p-0"
               >
                 Request access here
