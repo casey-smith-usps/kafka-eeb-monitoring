@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { Mail, User, MessageSquare, Send, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-export default function RequestAccess() {
+interface RequestAccessProps {
+  onShowLogin?: () => void;
+}
+
+export default function RequestAccess({ onShowLogin }: RequestAccessProps) {
   const [formData, setFormData] = useState({
     email: '',
     fullName: '',
@@ -70,7 +74,7 @@ export default function RequestAccess() {
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Enterprise Event Bus
+            Enterprise Event Broker
           </h1>
           <p className="text-gray-600">
             Request access to the monitoring platform
@@ -159,9 +163,12 @@ export default function RequestAccess() {
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-500">
             Already have an account?{' '}
-            <a href="/?view=login" className="text-blue-600 hover:text-blue-700 font-medium">
+            <button
+              onClick={() => onShowLogin?.()}
+              className="text-blue-600 hover:text-blue-700 font-medium underline cursor-pointer bg-transparent border-none p-0"
+            >
               Sign in here
-            </a>
+            </button>
           </p>
         </div>
       </div>

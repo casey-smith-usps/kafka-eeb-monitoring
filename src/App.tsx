@@ -223,7 +223,9 @@ function AppContent() {
 
   if (!userProfile) {
     console.log('No userProfile, showing', showLogin ? 'Login' : 'RequestAccess');
-    return showLogin ? <Login /> : <RequestAccess />;
+    return showLogin
+      ? <Login onShowRequestAccess={() => setShowLogin(false)} />
+      : <RequestAccess onShowLogin={() => setShowLogin(true)} />;
   }
 
   console.log('UserProfile exists, rendering ProtectedRoute');
