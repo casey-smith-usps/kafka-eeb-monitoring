@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 
@@ -32,6 +32,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const loginAtRef = useRef<Date | null>(null);
+  const activityLogIdRef = useRef<string | null>(null);
+
+  const logActivity = async (
+    email: string,
+    userId: string | null,
+    eventType: 'login' | 'logout' | 'session_expired',
+    loginAt?: Date,
+    logoutAt?: Date
+  ) => {
+    const durationSeconds =
+      loginAt && logoutAt
+        ? Math.round((logoutAt.getTime() - loginAt.getTime()) / 1000)
+        : null;
+
+    const { data } = await supabase.from('user_activity_log').insert([{
+      user_id: userId,
+      email,
+      event_type: eventType,
+      login_at: eventType === 'login' ? (loginAt ?? new Date()).toISOString() : null,
+      logout_at: logoutAt ? logoutAt.toISOString() : null,
+      duration_seconds: durationSeconds,
+      user_agent: navigator.userAgent.slice(0, 500),
+    }]).select('id').maybeSingle();
+
+    return data?.id ?? null;
+  };
 
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -92,18 +119,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (event === 'SIGNED_OUT') {
           setUserProfile(null);
         }
-        // For other events with no session (e.g. TOKEN_REFRESHED failures),
-        // preserve the existing userProfile so custom-token users aren't kicked out.
       })();
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password?: string) => {
+  const signIn = async (email: string, _password?: string) => {
     try {
-      // For this system, we use email-only authentication
-      // Check if user exists in user_profiles table
+      if (!email.toLowerCase().endsWith('@usps.gov')) {
+        return { success: false, error: 'Access is restricted to @usps.gov email addresses only.' };
+      }
+
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -120,19 +147,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: 'User not found or account not active' };
       }
 
-      // Store the access token in localStorage for RLS policies
       if (profile.access_token) {
         localStorage.setItem('access_token', profile.access_token);
       }
 
-      // Set the user profile
       setUserProfile(profile as UserProfile);
 
-      // Update last access
+      const now = new Date();
+      loginAtRef.current = now;
+
       await supabase
         .from('user_profiles')
-        .update({ last_access: new Date().toISOString() })
+        .update({ last_access: now.toISOString() })
         .eq('id', profile.id);
+
+      const logId = await logActivity(email, profile.id, 'login', now);
+      activityLogIdRef.current = logId;
 
       return { success: true };
     } catch (error) {
@@ -154,15 +184,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: 'Invalid token' };
       }
 
-      // Store the access token in localStorage for RLS policies
       localStorage.setItem('access_token', token);
-
       setUserProfile(profile as UserProfile);
+
+      const now = new Date();
+      loginAtRef.current = now;
 
       await supabase
         .from('user_profiles')
-        .update({ last_access: new Date().toISOString() })
+        .update({ last_access: now.toISOString() })
         .eq('id', profile.id);
+
+      const logId = await logActivity(profile.email, profile.id, 'login', now);
+      activityLogIdRef.current = logId;
 
       return { success: true };
     } catch (error) {
@@ -171,8 +205,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    const profile = userProfile;
+    const loginAt = loginAtRef.current;
+    const logoutAt = new Date();
+
     await supabase.auth.signOut();
     localStorage.removeItem('access_token');
+
+    if (profile) {
+      await logActivity(
+        profile.email,
+        profile.id,
+        'logout',
+        loginAt ?? undefined,
+        logoutAt
+      );
+    }
+
+    loginAtRef.current = null;
+    activityLogIdRef.current = null;
     setUser(null);
     setUserProfile(null);
   };

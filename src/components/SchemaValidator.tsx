@@ -4,7 +4,7 @@ import {
   GitCompare, Play, Sparkles, AlertTriangle, CheckCircle2, Info,
   XCircle, ChevronDown, ChevronRight, Download, RefreshCw, Clock,
   ArrowRight, Layers, Search, Upload, FileText, FileCode, FileSpreadsheet,
-  X, Table
+  X, Table, Coffee
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -56,7 +56,7 @@ interface ValidationSummary {
   unresolved: number;
   inbound_field_count: number;
   outbound_field_count: number;
-  python_mapper?: string;
+  java_mapper?: string;
 }
 
 interface Session {
@@ -137,9 +137,11 @@ function SchemaValidator() {
   const [findings, setFindings] = useState<ValidationFinding[]>([]);
   const [mappings, setMappings] = useState<MappingCandidate[]>([]);
   const [mappingRows, setMappingRows] = useState<MappingRow[]>([]);
-  const [pythonScript, setPythonScript] = useState('');
   const [summary, setSummary] = useState<ValidationSummary | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+
+  const [javaMapper, setJavaMapper] = useState('');
+  const [jsMapper, setJsMapper] = useState('');
 
   const [validating, setValidating] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
@@ -193,45 +195,50 @@ function SchemaValidator() {
   ) => {
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     setUploadedFiles(prev => ({ ...prev, [target]: file.name }));
+    const isSchemaTarget = target === 'inboundSchema' || target === 'outboundSchema';
+    const side = (target === 'inboundSchema' || target === 'inboundIcd') ? 'inbound' : 'outbound';
 
     try {
-      if (ext === 'json') {
+      // AVRO schema files (.avsc or .json) — treat as JSON schema content
+      if (ext === 'avsc' || (ext === 'json' && isSchemaTarget)) {
         const text = await file.text();
         if (target === 'inboundSchema') { setInboundSchema(text); validateJsonSchema(text, 'inbound'); }
         else if (target === 'outboundSchema') { setOutboundSchema(text); validateJsonSchema(text, 'outbound'); }
         else if (target === 'inboundIcd') setInboundIcd(text);
         else setOutboundIcd(text);
+      } else if (ext === 'json' && !isSchemaTarget) {
+        // JSON uploaded to ICD slot — store as text context
+        const text = await file.text();
+        if (target === 'inboundIcd') setInboundIcd(text);
+        else setOutboundIcd(text);
       } else if (['txt', 'md'].includes(ext)) {
         const text = await file.text();
         if (target === 'inboundIcd') setInboundIcd(text);
         else if (target === 'outboundIcd') setOutboundIcd(text);
-        else if (target === 'inboundSchema') { setInboundSchema(text); validateJsonSchema(text, 'inbound'); }
-        else setOutboundSchema(text);
+        else if (target === 'inboundSchema') { setInboundSchema(text); validateJsonSchema(text, side); }
+        else { setOutboundSchema(text); validateJsonSchema(text, side); }
       } else if (['xlsx', 'xls', 'csv'].includes(ext)) {
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const text = XLSX.utils.sheet_to_csv(ws);
-        if (target === 'inboundIcd') setInboundIcd(text);
-        else setOutboundIcd(text);
+        const extracted = extractIcdFieldsFromWorkbook(wb, file.name);
+        if (target === 'inboundIcd') setInboundIcd(extracted);
+        else setOutboundIcd(extracted);
       } else if (['docx', 'doc'].includes(ext)) {
-        // For Word docs: extract raw XML text (basic approach without mammoth)
-        // Read as binary and extract readable text
         const buf = await file.arrayBuffer();
         const arr = new Uint8Array(buf);
-        // Try to extract text from the binary content (look for readable strings)
         const decoder = new TextDecoder('utf-8', { fatal: false });
         const raw = decoder.decode(arr);
-        // Extract visible text between XML tags or readable segments
         const textContent = raw
           .replace(/<[^>]+>/g, ' ')
           .replace(/[^\x20-\x7E\n\r\t]/g, ' ')
           .replace(/\s{3,}/g, '\n')
           .trim();
-        if (target === 'inboundIcd') setInboundIcd(textContent || `[Uploaded: ${file.name} — paste text content manually for best results]`);
-        else setOutboundIcd(textContent || `[Uploaded: ${file.name} — paste text content manually for best results]`);
+        const result = textContent.length > 100
+          ? `[Word document: ${file.name}]\n\n${textContent}`
+          : `[Word document uploaded: ${file.name} — for best results, also paste the field table as text below]`;
+        if (target === 'inboundIcd') setInboundIcd(result);
+        else setOutboundIcd(result);
       } else {
-        // Fallback: try reading as text
         const text = await file.text();
         if (target === 'inboundIcd') setInboundIcd(text);
         else if (target === 'outboundIcd') setOutboundIcd(text);
@@ -282,7 +289,8 @@ function SchemaValidator() {
     setMappings([]);
     setMappingRows([]);
     setSummary(null);
-    setPythonScript('');
+    setJavaMapper('');
+    setJsMapper('');
     setSessionId(null);
 
     try {
@@ -357,7 +365,8 @@ function SchemaValidator() {
 
       if (result.ai_mappings?.length) setMappings(prev => [...prev, ...result.ai_mappings]);
       if (result.mapping_rows?.length) setMappingRows(result.mapping_rows);
-      if (result.python_script) setPythonScript(result.python_script);
+      if (result.java_mapper) setJavaMapper(result.java_mapper);
+      if (result.js_mapper) setJsMapper(result.js_mapper);
       if (result.open_questions?.length) {
         setFindings(prev => [...prev, ...result.open_questions.map((q: string) => ({
           severity: 'info' as const,
@@ -382,7 +391,8 @@ function SchemaValidator() {
     setMappings(m || []);
     setSummary(s.summary);
     setSessionId(s.id);
-    if (s.summary?.python_mapper) setPythonScript(s.summary.python_mapper);
+    if (s.summary?.java_mapper) setJavaMapper(s.summary.java_mapper);
+    if (s.summary?.js_mapper) setJsMapper(s.summary.js_mapper);
     setProjectName(s.project_name);
     setActiveTab('findings');
   };
@@ -492,10 +502,18 @@ function SchemaValidator() {
     download(lines.join('\n'), `${name.replace(/[^a-z0-9]/gi, '_')}_mapping.md`, 'text/markdown');
   };
 
-  const exportPython = () => {
-    if (!pythonScript) return;
-    const name = projectName || 'mapper';
-    download(pythonScript, `${name.replace(/[^a-z0-9]/gi, '_')}_mapper.py`, 'text/plain');
+  const exportJava = () => {
+    if (!javaMapper) return;
+    const name = projectName || 'Mapper';
+    const className = name.replace(/[^a-zA-Z0-9]/g, '') + 'Mapper';
+    download(javaMapper, `${className}.java`, 'text/plain');
+  };
+
+  const exportJs = () => {
+    if (!jsMapper) return;
+    const name = projectName || 'Mapper';
+    const fileName = name.replace(/[^a-zA-Z0-9]/g, '') + 'Mapper.js';
+    download(jsMapper, fileName, 'text/javascript');
   };
 
   const filteredFindings = categoryFilter === 'all'
@@ -539,10 +557,16 @@ function SchemaValidator() {
               className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors">
               <FileText className="w-4 h-4" /> Markdown
             </button>
-            {pythonScript && (
-              <button onClick={exportPython}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-                <FileCode className="w-4 h-4" /> Python Script
+            {javaMapper && (
+              <button onClick={exportJava}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-medium transition-colors">
+                <Coffee className="w-4 h-4" /> Download Java
+              </button>
+            )}
+            {jsMapper && (
+              <button onClick={exportJs}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-sm font-medium transition-colors">
+                <FileCode className="w-4 h-4" /> Download JS
               </button>
             )}
           </div>
@@ -605,7 +629,7 @@ function SchemaValidator() {
             <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
               <FileText className="w-4 h-4 text-slate-400" />
               ICD Documents
-              <span className="text-xs font-normal text-slate-400">— upload Word, PDF, TXT, or paste text (improves AI mapping accuracy)</span>
+              <span className="text-xs font-normal text-slate-400">— upload Excel ICD, Word, AVSC/JSON schema, or paste text (improves AI mapping accuracy)</span>
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <IcdUploadArea
@@ -654,11 +678,19 @@ function SchemaValidator() {
       {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <SummaryCard label="Errors" value={summary.errors} color="text-red-600" bg="bg-red-50" />
-          <SummaryCard label="Warnings" value={summary.warnings} color="text-amber-600" bg="bg-amber-50" />
-          <SummaryCard label="Info" value={summary.info} color="text-blue-600" bg="bg-blue-50" />
-          <SummaryCard label="Direct Maps" value={summary.direct_mappings} color="text-emerald-600" bg="bg-emerald-50" />
-          <SummaryCard label="Renames" value={summary.rename_candidates} color="text-teal-600" bg="bg-teal-50" />
+          <SummaryCard label="Errors" value={summary.errors} color="text-red-600" bg="bg-red-50"
+            active={categoryFilter === 'error' && activeTab === 'findings'}
+            onClick={() => { setCategoryFilter('error'); setActiveTab('findings'); }} />
+          <SummaryCard label="Warnings" value={summary.warnings} color="text-amber-600" bg="bg-amber-50"
+            active={categoryFilter === 'warning' && activeTab === 'findings'}
+            onClick={() => { setCategoryFilter('warning'); setActiveTab('findings'); }} />
+          <SummaryCard label="Info" value={summary.info} color="text-blue-600" bg="bg-blue-50"
+            active={categoryFilter === 'info' && activeTab === 'findings'}
+            onClick={() => { setCategoryFilter('info'); setActiveTab('findings'); }} />
+          <SummaryCard label="Direct Maps" value={summary.direct_mappings} color="text-emerald-600" bg="bg-emerald-50"
+            onClick={() => setActiveTab('mappings')} />
+          <SummaryCard label="Renames" value={summary.rename_candidates} color="text-teal-600" bg="bg-teal-50"
+            onClick={() => setActiveTab('mappings')} />
           <SummaryCard label="Inbound" value={summary.inbound_field_count} color="text-slate-600" bg="bg-slate-50" />
           <SummaryCard label="Outbound" value={summary.outbound_field_count} color="text-slate-600" bg="bg-slate-50" />
         </div>
@@ -692,8 +724,8 @@ function SchemaValidator() {
             {activeTab === 'mappings' && (
               <MappingsPanel
                 mappings={mappings} mappingRows={mappingRows}
-                onExcelExport={exportExcel} onPythonExport={exportPython}
-                pythonScript={pythonScript}
+                onExcelExport={exportExcel} onJavaExport={exportJava} onJsExport={exportJs}
+                javaMapper={javaMapper} jsMapper={jsMapper}
               />
             )}
             {activeTab === 'history' && <HistoryPanel sessions={sessions} onLoad={loadSession} />}
@@ -747,10 +779,10 @@ function IcdUploadArea({ label, value, fileName, onChange, onFile, onClear }: {
           ) : (
             <p className="text-sm text-slate-400">Drop file or click to upload</p>
           )}
-          <p className="text-xs text-slate-400 mt-0.5">Word (.docx), TXT, PDF, Excel, JSON</p>
+          <p className="text-xs text-slate-400 mt-0.5">Word (.docx), Excel (.xlsx), TXT, JSON, AVSC</p>
         </div>
         <input ref={ref} type="file" className="hidden"
-          accept=".docx,.doc,.txt,.md,.pdf,.xlsx,.xls,.csv,.json"
+          accept=".docx,.doc,.txt,.md,.pdf,.xlsx,.xls,.csv,.json,.avsc"
           onChange={e => { if (e.target.files?.[0]) onFile(e.target.files[0]); }} />
       </div>
 
@@ -762,7 +794,22 @@ function IcdUploadArea({ label, value, fileName, onChange, onFile, onClear }: {
         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 resize-y"
       />
       {value && (
-        <p className="text-xs text-slate-400">{value.length.toLocaleString()} characters loaded</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className="text-xs text-slate-400">{value.length.toLocaleString()} characters loaded</p>
+          {value.includes('fields extracted') && (() => {
+            const m = value.match(/\[(\d+) fields extracted/);
+            return m ? (
+              <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> {m[1]} fields parsed from spreadsheet
+              </span>
+            ) : null;
+          })()}
+          {value.startsWith('[Word document:') && (
+            <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> Word extracted — verify content below
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
@@ -882,11 +929,20 @@ function SchemaTypeBadge({ type }: { type: string }) {
 
 // ── Summary Card ───────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, value, color, bg }: { label: string; value: number; color: string; bg: string }) {
+function SummaryCard({ label, value, color, bg, onClick, active }: {
+  label: string; value: number; color: string; bg: string;
+  onClick?: () => void; active?: boolean;
+}) {
   return (
-    <div className={`${bg} rounded-xl p-4 text-center`}>
+    <div
+      onClick={onClick}
+      className={`${bg} rounded-xl p-4 text-center transition-all ${
+        onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.03]' : ''
+      } ${active ? 'ring-2 ring-offset-1 ring-teal-500 shadow-md' : ''}`}
+    >
       <p className={`text-2xl font-bold ${color}`}>{value}</p>
       <p className="text-xs text-slate-500 mt-1 font-medium">{label}</p>
+      {onClick && <p className="text-xs text-slate-400 mt-0.5">click to filter</p>}
     </div>
   );
 }
@@ -968,12 +1024,13 @@ function FindingsPanel({ findings, allFindings, categoryFilter, setCategoryFilte
 
 // ── Mappings Panel ─────────────────────────────────────────────────────────────
 
-function MappingsPanel({ mappings, mappingRows, onExcelExport, onPythonExport, pythonScript }: {
+function MappingsPanel({ mappings, mappingRows, onExcelExport, onJavaExport, onJsExport, javaMapper, jsMapper }: {
   mappings: MappingCandidate[]; mappingRows: MappingRow[];
-  onExcelExport: () => void; onPythonExport: () => void; pythonScript: string;
+  onExcelExport: () => void; onJavaExport: () => void; onJsExport: () => void;
+  javaMapper: string; jsMapper: string;
 }) {
   const [typeFilter, setTypeFilter] = useState('all');
-  const [showPython, setShowPython] = useState(false);
+  const [showCode, setShowCode] = useState<'java' | 'js' | null>(null);
 
   // Prefer structured mapping rows from AI; fall back to candidates
   const rows: MappingRow[] = mappingRows.length > 0 ? mappingRows : mappings.map(m => ({
@@ -1023,37 +1080,10 @@ function MappingsPanel({ mappings, mappingRows, onExcelExport, onPythonExport, p
         <div className="flex items-center gap-2">
           <button onClick={onExcelExport}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors">
-            <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+            <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
           </button>
-          {pythonScript && (
-            <button onClick={() => setShowPython(v => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors">
-              <FileCode className="w-3.5 h-3.5" /> {showPython ? 'Hide' : 'View'} Python
-            </button>
-          )}
-          {pythonScript && (
-            <button onClick={onPythonExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-medium transition-colors">
-              <Download className="w-3.5 h-3.5" /> Download .py
-            </button>
-          )}
         </div>
       </div>
-
-      {showPython && pythonScript && (
-        <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-slate-400 font-mono">mapper_draft.py — review all TODOs before production use</p>
-            <button onClick={onPythonExport}
-              className="flex items-center gap-1 text-xs text-slate-300 hover:text-white transition-colors">
-              <Download className="w-3 h-3" /> download
-            </button>
-          </div>
-          <pre className="text-xs text-emerald-300 font-mono whitespace-pre leading-relaxed overflow-x-auto">
-            {pythonScript}
-          </pre>
-        </div>
-      )}
 
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full text-sm">
@@ -1112,14 +1142,86 @@ function MappingsPanel({ mappings, mappingRows, onExcelExport, onPythonExport, p
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-400 flex items-center gap-3 flex-wrap">
         Showing {filtered.length} of {rows.length} mappings
         {rows.some(r => r.ai_generated) && (
-          <span className="ml-2 text-amber-500 flex items-center gap-1 inline-flex">
+          <span className="text-amber-500 flex items-center gap-1">
             <Sparkles className="w-3 h-3" /> includes AI-generated rows
           </span>
         )}
       </p>
+
+      {/* Code Downloads — always visible */}
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="bg-slate-800 px-4 py-3 flex items-center justify-between">
+          <span className="text-sm font-semibold text-white flex items-center gap-2">
+            <FileCode className="w-4 h-4 text-slate-300" /> Code Downloads
+          </span>
+          {(javaMapper || jsMapper) && (
+            <span className="text-xs text-slate-400">Click a button to preview, then download</span>
+          )}
+        </div>
+
+        {!javaMapper && !jsMapper ? (
+          <div className="px-5 py-6 bg-slate-50 text-center">
+            <p className="text-sm text-slate-500 font-medium">No mapper code generated yet</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Click <span className="font-semibold text-amber-600">Generate AI Mapping</span> above to create Java and JavaScript mapper files
+            </p>
+          </div>
+        ) : (
+          <div className="p-4 bg-slate-50 space-y-3">
+            <div className="flex flex-wrap gap-3">
+              {javaMapper && (
+                <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-2">
+                  <Coffee className="w-4 h-4 text-blue-700" />
+                  <span className="text-sm font-medium text-blue-800">Java Mapper</span>
+                  <button onClick={() => setShowCode(showCode === 'java' ? null : 'java')}
+                    className="text-xs px-2 py-0.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors font-medium">
+                    {showCode === 'java' ? 'Hide' : 'Preview'}
+                  </button>
+                  <button onClick={onJavaExport}
+                    className="text-xs px-2 py-0.5 bg-blue-700 hover:bg-blue-800 text-white rounded transition-colors font-medium flex items-center gap-1">
+                    <Download className="w-3 h-3" /> .java
+                  </button>
+                </div>
+              )}
+              {jsMapper && (
+                <div className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
+                  <FileCode className="w-4 h-4 text-amber-700" />
+                  <span className="text-sm font-medium text-amber-800">JavaScript Mapper</span>
+                  <button onClick={() => setShowCode(showCode === 'js' ? null : 'js')}
+                    className="text-xs px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded transition-colors font-medium">
+                    {showCode === 'js' ? 'Hide' : 'Preview'}
+                  </button>
+                  <button onClick={onJsExport}
+                    className="text-xs px-2 py-0.5 bg-amber-700 hover:bg-amber-800 text-white rounded transition-colors font-medium flex items-center gap-1">
+                    <Download className="w-3 h-3" /> .js
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {showCode === 'java' && javaMapper && (
+              <div className="bg-slate-900 rounded-lg p-4 overflow-x-auto">
+                <p className="text-xs text-slate-400 font-mono mb-3">Mapper.java — review all TODO sections before production use</p>
+                <pre className="text-xs text-amber-300 font-mono whitespace-pre leading-relaxed overflow-x-auto">
+                  {javaMapper}
+                </pre>
+              </div>
+            )}
+
+            {showCode === 'js' && jsMapper && (
+              <div className="bg-slate-900 rounded-lg p-4 overflow-x-auto">
+                <p className="text-xs text-slate-400 font-mono mb-3">Mapper.js — CommonJS module, review all TODO sections before production use</p>
+                <pre className="text-xs text-green-300 font-mono whitespace-pre leading-relaxed overflow-x-auto">
+                  {jsMapper}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1218,6 +1320,62 @@ function detectSchemaType(parsed: any): string {
   // Avro named types without explicit "record"
   if (parsed.fields && Array.isArray(parsed.fields)) return 'avro';
   return 'unknown';
+}
+
+// Intelligently extract field definitions from an Excel ICD workbook.
+// Searches all sheets for a table that looks like a field definition list
+// (columns named Field/Name, Type, Description or similar).
+// Falls back to CSV of first sheet if no structured table found.
+function extractIcdFieldsFromWorkbook(wb: XLSX.WorkBook, fileName: string): string {
+  const FIELD_HEADERS = ['field', 'fieldname', 'field name', 'name', 'attribute', 'column', 'element'];
+  const TYPE_HEADERS = ['type', 'datatype', 'data type', 'format'];
+  const DESC_HEADERS = ['description', 'desc', 'definition', 'notes', 'comment', 'remarks'];
+
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][];
+    if (rows.length < 2) continue;
+
+    // Find the header row (first row where we recognise field + type or description headers)
+    let headerRowIdx = -1;
+    let fieldCol = -1, typeCol = -1, descCol = -1;
+
+    for (let r = 0; r < Math.min(rows.length, 15); r++) {
+      const row = rows[r].map((c: any) => String(c).toLowerCase().trim().replace(/[\s_-]+/g, ''));
+      const fi = row.findIndex((c: string) => FIELD_HEADERS.includes(c));
+      const ti = row.findIndex((c: string) => TYPE_HEADERS.includes(c));
+      const di = row.findIndex((c: string) => DESC_HEADERS.includes(c));
+      if (fi >= 0 && (ti >= 0 || di >= 0)) {
+        headerRowIdx = r;
+        fieldCol = fi;
+        typeCol = ti;
+        descCol = di;
+        break;
+      }
+    }
+
+    if (headerRowIdx < 0) continue;
+
+    const lines: string[] = [`[ICD: ${fileName} — Sheet: ${sheetName}]\n`];
+    const dataRows = rows.slice(headerRowIdx + 1).filter(r => r[fieldCol] && String(r[fieldCol]).trim());
+
+    lines.push(`Field Name | Type | Description`);
+    lines.push(`---------- | ---- | -----------`);
+    for (const row of dataRows) {
+      const field = String(row[fieldCol] ?? '').trim();
+      const type = typeCol >= 0 ? String(row[typeCol] ?? '').trim() : '';
+      const desc = descCol >= 0 ? String(row[descCol] ?? '').trim() : '';
+      if (field) lines.push(`${field} | ${type} | ${desc}`);
+    }
+
+    lines.push(`\n[${dataRows.length} fields extracted from sheet "${sheetName}"]`);
+    return lines.join('\n');
+  }
+
+  // Fallback: no structured table found — return CSV of first sheet
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const csv = XLSX.utils.sheet_to_csv(ws);
+  return `[ICD: ${fileName} — raw data, no field table detected]\n\n${csv}`;
 }
 
 function download(content: string, filename: string, mime: string) {

@@ -23,15 +23,8 @@ interface Message {
 interface RequestBody {
   messages: Message[];
   max_tokens?: number;
-  temperature?: number;
   user_id?: string;
   request_type?: string;
-}
-
-// Serverless SQL Warehouse cost estimation
-// ~0.002 DBU per 3-second query × $0.22/DBU = $0.00044
-function estimateCost(promptTokens: number, completionTokens: number): number {
-  return 0.00044;
 }
 
 async function logUsage(
@@ -44,8 +37,7 @@ async function logUsage(
   errorMessage?: string
 ) {
   try {
-    const estimatedCost = estimateCost(promptTokens, completionTokens);
-
+    const estimatedCost = (totalTokens / 1_000_000) * 2.0;
     await supabase.from('ai_usage_log').insert({
       user_id: userId || 'anonymous',
       endpoint_name: 'databricks-sql-serverless',
@@ -57,136 +49,129 @@ async function logUsage(
       success,
       error_message: errorMessage,
     });
-  } catch (error) {
-    console.error('Failed to log AI usage:', error);
+  } catch (err) {
+    console.error('Failed to log AI usage:', err);
   }
 }
 
-async function executeStatement(warehouseId: string, sqlStatement: string): Promise<any> {
-  const url = `${DATABRICKS_HOST}/api/2.0/sql/statements`;
+async function executeStatementWithPolling(sqlStatement: string): Promise<string> {
+  const headers = {
+    'Authorization': `Bearer ${DATABRICKS_TOKEN}`,
+    'Content-Type': 'application/json',
+  };
 
-  const response = await fetch(url, {
+  // Submit with max inline wait
+  const submitRes = await fetch(`${DATABRICKS_HOST}/api/2.0/sql/statements`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DATABRICKS_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
-      warehouse_id: warehouseId,
+      warehouse_id: DATABRICKS_SQL_WAREHOUSE_ID,
       statement: sqlStatement,
-      wait_timeout: '30s',
+      wait_timeout: '50s',
     }),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Databricks SQL API error: ${response.status} - ${errorText}`);
+  if (!submitRes.ok) {
+    const err = await submitRes.text();
+    throw new Error(`Databricks SQL submit error (${submitRes.status}): ${err}`);
   }
 
-  return await response.json();
+  let result = await submitRes.json();
+  let state: string = result.status?.state ?? 'UNKNOWN';
+
+  // Poll if still running (warehouse cold-start can take time)
+  if (state === 'PENDING' || state === 'RUNNING') {
+    const statementId: string = result.statement_id;
+    const pollUrl = `${DATABRICKS_HOST}/api/2.0/sql/statements/${statementId}`;
+    const maxPolls = 8;
+
+    for (let i = 0; i < maxPolls; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      const pollRes = await fetch(pollUrl, { headers });
+      if (!pollRes.ok) {
+        const err = await pollRes.text();
+        throw new Error(`Poll error (${pollRes.status}): ${err}`);
+      }
+      result = await pollRes.json();
+      state = result.status?.state ?? 'UNKNOWN';
+      if (state !== 'PENDING' && state !== 'RUNNING') break;
+    }
+  }
+
+  if (state === 'FAILED' || state === 'CANCELLED') {
+    const msg = result.status?.error?.message ?? state;
+    throw new Error(`SQL query ${state}: ${msg}`);
+  }
+
+  if (state !== 'SUCCEEDED') {
+    throw new Error(`SQL query did not complete in time (state: ${state}). The SQL warehouse may be starting up — please try again in a moment.`);
+  }
+
+  const aiResponse: string = result.result?.data_array?.[0]?.[0] ?? '';
+  if (!aiResponse) {
+    console.error('Empty data_array in result:', JSON.stringify(result));
+    throw new Error('AI query returned no response. Check that ai_query() is enabled on your SQL warehouse.');
+  }
+
+  return aiResponse;
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
     if (!DATABRICKS_HOST || !DATABRICKS_TOKEN || !DATABRICKS_SQL_WAREHOUSE_ID) {
-      throw new Error('Databricks SQL configuration missing. Required: DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_SQL_WAREHOUSE_ID');
+      throw new Error('Databricks SQL configuration missing: DATABRICKS_HOST, DATABRICKS_TOKEN, and DATABRICKS_SQL_WAREHOUSE_ID are required.');
     }
 
-    const { messages, max_tokens = 2000, user_id, request_type }: RequestBody = await req.json();
+    const { messages, user_id, request_type }: RequestBody = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       throw new Error('Invalid request: messages array is required');
     }
 
-    // Build the conversation context
-    const systemMessage = messages.find(m => m.role === 'system')?.content ||
+    const systemMessage = messages.find(m => m.role === 'system')?.content ??
       'You are a helpful AI assistant for the Enterprise Event Bus platform.';
     const conversationHistory = messages.filter(m => m.role !== 'system');
-    const userQuestion = conversationHistory[conversationHistory.length - 1]?.content || '';
+    const userQuestion = conversationHistory[conversationHistory.length - 1]?.content ?? '';
+    const context = conversationHistory.slice(0, -1).map(m => `${m.role}: ${m.content}`).join('\n');
 
-    // Build context from conversation history
-    const context = conversationHistory.slice(0, -1)
-      .map(m => `${m.role}: ${m.content}`)
-      .join('\n');
-
-    // Construct SQL query using ai_query function
-    const prompt = context
+    const rawPrompt = context
       ? `${systemMessage}\n\nConversation History:\n${context}\n\nUser: ${userQuestion}`
       : `${systemMessage}\n\nUser: ${userQuestion}`;
 
-    const sqlStatement = `SELECT ai_query('databricks-meta-llama-3-3-70b-instruct', '${prompt.replace(/'/g, "''")}')`;
+    // Strip binary/control chars that break SQL string literals, escape single quotes
+    const sanitized = rawPrompt
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+      .replace(/\r/g, '')
+      .replace(/'/g, "''");
 
-    console.log('Executing SQL AI query...');
-    console.log('SQL Statement:', sqlStatement);
-    const result = await executeStatement(DATABRICKS_SQL_WAREHOUSE_ID, sqlStatement);
-    console.log('Query result:', JSON.stringify(result, null, 2));
+    const sqlStatement = `SELECT ai_query('databricks-meta-llama-3-3-70b-instruct', '${sanitized}')`;
 
-    // Extract response from result
-    let aiResponse = '';
-    if (result.result?.data_array && result.result.data_array.length > 0) {
-      aiResponse = result.result.data_array[0][0] || '';
-    }
+    const aiResponse = await executeStatementWithPolling(sqlStatement);
 
-    if (!aiResponse) {
-      console.error('No response in result:', result);
-      throw new Error('No response from AI query');
-    }
-
-    // Estimate token usage
-    const promptTokens = Math.round(prompt.length / 4);
+    const promptTokens = Math.round(rawPrompt.length / 4);
     const completionTokens = Math.round(aiResponse.length / 4);
     const totalTokens = promptTokens + completionTokens;
 
     await logUsage(user_id, promptTokens, completionTokens, totalTokens, request_type || 'chat', true);
 
-    // Format response to match OpenAI-style format
-    const response = {
-      choices: [
-        {
-          message: {
-            role: 'assistant',
-            content: aiResponse,
-          },
-          finish_reason: 'stop',
-        },
-      ],
-      usage: {
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
-        total_tokens: totalTokens,
-      },
-    };
-
-    return new Response(
-      JSON.stringify(response),
-      {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-  } catch (error) {
-    console.error('Error in databricks-sql-ai function:', error);
-
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Internal server error',
+        choices: [{ message: { role: 'assistant', content: aiResponse }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens },
       }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error in databricks-sql-ai:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    await logUsage(undefined, 0, 0, 0, 'chat', false, message);
+    return new Response(
+      JSON.stringify({ error: message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

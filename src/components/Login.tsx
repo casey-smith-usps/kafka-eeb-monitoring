@@ -11,6 +11,12 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!email.toLowerCase().endsWith('@usps.gov')) {
+      setError('Access is restricted to @usps.gov email addresses only.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -62,11 +68,11 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="casey.y.smith@usps.gov"
+                  placeholder="firstname.lastname@usps.gov"
                 />
               </div>
               <p className="mt-2 text-xs text-slate-400">
-                Enter your registered email address to sign in
+                USPS network credentials required — @usps.gov addresses only
               </p>
             </div>
 

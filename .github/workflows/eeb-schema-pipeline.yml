@@ -1,0 +1,255 @@
+name: EEB Schema Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'schemas/**/*.avsc'
+      - 'specs/**/*.csv'
+  pull_request:
+    paths:
+      - 'schemas/**/*.avsc'
+      - 'specs/**/*.csv'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ────────────────────────────────────────────────────────────────
+  # Job 1: Validate all .avsc files on every push/PR
+  # ────────────────────────────────────────────────────────────────
+  validate-schemas:
+    name: Validate Avro Schemas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install avro-python3
+        run: pip install avro-python3
+
+      - name: Validate all .avsc files
+        id: validate
+        run: |
+          set -e
+          ERRORS=0
+          shopt -s nullglob globstar
+          for f in schemas/**/*.avsc schemas/*.avsc; do
+            [ -f "$f" ] || continue
+            echo "Validating: $f"
+            python3 - "$f" <<'PYEOF'
+          import avro.schema, sys
+          try:
+              schema = avro.schema.parse(open(sys.argv[1]).read())
+              print(f'  OK: {schema.name}')
+          except Exception as e:
+              print(f'  FAIL: {e}', file=sys.stderr)
+              sys.exit(1)
+          PYEOF
+            if [ $? -ne 0 ]; then ERRORS=$((ERRORS + 1)); fi
+          done
+          if [ $ERRORS -gt 0 ]; then
+            echo "schema_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "schema_valid=true" >> $GITHUB_OUTPUT
+
+      - name: Comment PR with validation result
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const valid = '${{ steps.validate.outputs.schema_valid }}' === 'true';
+            const body = valid
+              ? '## Avro Schema Validation\n\n✅ All `.avsc` schemas are **valid**. Ready for Schema Registry registration on merge.'
+              : '## Avro Schema Validation\n\n❌ **One or more schemas failed validation.** Check the Actions log for details.';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+  # ────────────────────────────────────────────────────────────────
+  # Job 2: On merge to main — register schemas + create topics
+  # Runs only after validate-schemas passes
+  # ────────────────────────────────────────────────────────────────
+  register-and-provision:
+    name: Register Schemas & Provision Topics
+    runs-on: ubuntu-latest
+    needs: validate-schemas
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      # Schema Registry (psrc-*) and Kafka REST (lkc-*) are different endpoints.
+      # Add these 3 new secrets in GitHub → Settings → Secrets → Actions:
+      #   CONFLUENT_SR_URL        = https://psrc-67zq6.us-east4.gcp.confluent.cloud
+      #   CONFLUENT_SR_API_KEY    = URC4AVTEVT7LGPDJ
+      #   CONFLUENT_SR_API_SECRET = (schemaApiSecret from clusterConfig dev-gcp)
+      # Existing VITE_CONFLUENT_* secrets must point to DEV GCP (lkc-y9zr9j):
+      #   VITE_CONFLUENT_ADMIN_URL  = https://lkc-y9zr9j.domng65099w.us-east4.gcp.confluent.cloud
+      #   VITE_CONFLUENT_CLUSTER_ID = lkc-y9zr9j
+      #   VITE_CONFLUENT_API_KEY    = LXZ4E35XIGTCQ2AR
+      #   VITE_CONFLUENT_API_SECRET = (apiSecret from clusterConfig dev-gcp)
+      SR_URL:        ${{ secrets.CONFLUENT_SR_URL }}
+      SR_API_KEY:    ${{ secrets.CONFLUENT_SR_API_KEY }}
+      SR_API_SECRET: ${{ secrets.CONFLUENT_SR_API_SECRET }}
+      KAFKA_REST:    ${{ secrets.VITE_CONFLUENT_ADMIN_URL }}
+      KAFKA_KEY:     ${{ secrets.VITE_CONFLUENT_API_KEY }}
+      KAFKA_SECRET:  ${{ secrets.VITE_CONFLUENT_API_SECRET }}
+      CLUSTER_ID:    ${{ secrets.VITE_CONFLUENT_CLUSTER_ID }}
+      # Topic defaults — override per-topic in the avsc filename comment or keep these
+      DEFAULT_PARTITIONS: "6"
+      DEFAULT_REPLICATION: "3"
+      DEFAULT_RETENTION_MS: "604800000"   # 7 days
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so changed-file detection works on squash merges too
+          fetch-depth: 0
+
+      - name: Detect changed .avsc files
+        id: changed
+        run: |
+          # All .avsc files changed between the previous push and HEAD
+          # Falls back to all schemas if this is the first commit
+          BASE=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse --root)
+          FILES=$(git diff --name-only "$BASE" HEAD -- 'schemas/*.avsc' 'schemas/**/*.avsc' | tr '\n' ' ')
+          echo "Changed files: $FILES"
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+
+      - name: Register schemas & create topics
+        if: steps.changed.outputs.files != ''
+        run: |
+          set -e
+
+          # ── helpers ────────────────────────────────────────────
+          register_subject() {
+            local SUBJECT="$1"
+            local FILE="$2"
+            echo ""
+            echo "▶ Registering subject: $SUBJECT"
+            # Wrap the raw .avsc content as the JSON payload Confluent expects
+            SCHEMA_JSON=$(python3 -c "
+          import sys, json
+          raw = open(sys.argv[1]).read()
+          print(json.dumps({'schema': raw, 'schemaType': 'AVRO'}))
+          " "$FILE")
+            HTTP=$(curl -s -o /tmp/sr_out.json -w "%{http_code}" \
+              -X POST \
+              -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+              -u "$SR_API_KEY:$SR_API_SECRET" \
+              "$SR_URL/subjects/$SUBJECT/versions" \
+              -d "$SCHEMA_JSON")
+            BODY=$(cat /tmp/sr_out.json)
+            echo "  HTTP $HTTP  →  $BODY"
+            if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
+              echo "  ERROR: Schema Registry returned $HTTP for subject $SUBJECT" >&2
+              return 1
+            fi
+            echo "  ✓ Subject $SUBJECT registered (id: $(echo "$BODY" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("id","?"))' 2>/dev/null))"
+          }
+
+          create_topic_if_missing() {
+            local TOPIC="$1"
+            echo ""
+            echo "▶ Provisioning topic: $TOPIC"
+            # Check if topic already exists
+            HTTP_CHECK=$(curl -s -o /tmp/topic_check.json -w "%{http_code}" \
+              -u "$KAFKA_KEY:$KAFKA_SECRET" \
+              "$KAFKA_REST/kafka/v3/clusters/$CLUSTER_ID/topics/$TOPIC")
+            if [ "$HTTP_CHECK" == "200" ]; then
+              echo "  ✓ Topic $TOPIC already exists — skipping creation"
+              return 0
+            fi
+            # Create the topic
+            PAYLOAD=$(python3 -c "
+          import json
+          print(json.dumps({
+            'topic_name': '$TOPIC',
+            'partitions_count': int('$DEFAULT_PARTITIONS'),
+            'replication_factor': int('$DEFAULT_REPLICATION'),
+            'configs': [
+              {'name': 'retention.ms', 'value': '$DEFAULT_RETENTION_MS'},
+              {'name': 'cleanup.policy', 'value': 'delete'}
+            ]
+          }))
+          ")
+            HTTP=$(curl -s -o /tmp/topic_out.json -w "%{http_code}" \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -u "$KAFKA_KEY:$KAFKA_SECRET" \
+              "$KAFKA_REST/kafka/v3/clusters/$CLUSTER_ID/topics" \
+              -d "$PAYLOAD")
+            BODY=$(cat /tmp/topic_out.json)
+            echo "  HTTP $HTTP  →  $BODY"
+            if [ "$HTTP" == "201" ]; then
+              echo "  ✓ Topic $TOPIC created ($DEFAULT_PARTITIONS partitions, replication $DEFAULT_REPLICATION)"
+            elif [ "$HTTP" == "400" ] && echo "$BODY" | grep -q "already exists"; then
+              echo "  ✓ Topic $TOPIC already exists"
+            else
+              echo "  ERROR: Topic creation returned $HTTP for $TOPIC" >&2
+              return 1
+            fi
+          }
+
+          # ── main loop ──────────────────────────────────────────
+          # Track which topics we've already provisioned this run
+          declare -A TOPICS_DONE
+
+          for FILE in ${{ steps.changed.outputs.files }}; do
+            [ -f "$FILE" ] || continue
+            BASENAME=$(basename "$FILE" .avsc)
+
+            # Determine subject suffix: filename ending in -key or -value
+            # e.g.  MID.LOGS.UPDATE.OWNER-key.avsc  →  subject MID.LOGS.UPDATE.OWNER-key
+            #       MID.LOGS.UPDATE.OWNER-value.avsc →  subject MID.LOGS.UPDATE.OWNER-value
+            #       MID.LOGS.UPDATE.OWNER.avsc        →  subject MID.LOGS.UPDATE.OWNER-value (legacy)
+            if [[ "$BASENAME" == *-key ]]; then
+              SUBJECT="$BASENAME"
+              TOPIC="${BASENAME%-key}"
+            elif [[ "$BASENAME" == *-value ]]; then
+              SUBJECT="$BASENAME"
+              TOPIC="${BASENAME%-value}"
+            else
+              # Legacy: no suffix — treat as value schema
+              SUBJECT="${BASENAME}-value"
+              TOPIC="$BASENAME"
+            fi
+
+            # Register with Schema Registry
+            register_subject "$SUBJECT" "$FILE"
+
+            # Create the Kafka topic once per unique topic name
+            if [ -z "${TOPICS_DONE[$TOPIC]+set}" ]; then
+              create_topic_if_missing "$TOPIC"
+              TOPICS_DONE[$TOPIC]=1
+            fi
+          done
+
+          echo ""
+          echo "✅ Schema registration and topic provisioning complete."
+
+      - name: No schema changes detected
+        if: steps.changed.outputs.files == ''
+        run: echo "No .avsc files changed in this push — nothing to register."
+
+  # ────────────────────────────────────────────────────────────────
+  # Job 3: Notify on any failure
+  # ────────────────────────────────────────────────────────────────
+  notify-on-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [validate-schemas, register-and-provision]
+    if: failure()
+    steps:
+      - name: Pipeline failed
+        run: |
+          echo "❌ EEB Schema Pipeline failed."
+          echo "Actions log: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

@@ -452,36 +452,3 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
-
-// Re-export flattenAvroFields for summary calculation in the handler above
-function flattenAvroFields(schema: any, prefix = "", namedTypes = new Map<string, any>()): Map<string, any> {
-  const result = new Map<string, any>();
-  if (!schema) return result;
-  if (typeof schema === "string") {
-    const resolved = namedTypes.get(schema);
-    if (resolved) return flattenAvroFields(resolved, prefix, namedTypes);
-    return result;
-  }
-  if (Array.isArray(schema)) {
-    for (const t of schema) {
-      if (t !== "null" && t !== null) {
-        flattenAvroFields(t, prefix, namedTypes).forEach((v, k) => result.set(k, v));
-      }
-    }
-    return result;
-  }
-  if (schema.type === "record") {
-    if (schema.name) namedTypes.set(schema.name, schema);
-    if (schema.namespace && schema.name) namedTypes.set(`${schema.namespace}.${schema.name}`, schema);
-    for (const field of (schema.fields || [])) {
-      const path = prefix ? `${prefix}.${field.name}` : field.name;
-      result.set(path, field);
-      flattenAvroFields(field.type, path, namedTypes).forEach((v, k) => result.set(k, v));
-    }
-  } else if (schema.type === "array") {
-    flattenAvroFields(schema.items, prefix ? `${prefix}[]` : "[]", namedTypes).forEach((v, k) => result.set(k, v));
-  } else if (schema.type === "map") {
-    flattenAvroFields(schema.values, prefix ? `${prefix}{}` : "{}", namedTypes).forEach((v, k) => result.set(k, v));
-  }
-  return result;
-}

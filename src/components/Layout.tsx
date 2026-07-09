@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { LayoutDashboard, ListChecks, AlertCircle, GitBranch, Activity, FileText, Network, Phone, Sparkles, Radio, LogOut, User, Shield, Users, CreditCard as Edit3, Database, Clock, GitCompare } from 'lucide-react';
+import { LayoutDashboard, ListChecks, AlertCircle, GitBranch, Activity, FileText, Network, Phone, Sparkles, Radio, LogOut, User, Shield, Users, CreditCard as Edit3, Database, Clock, GitCompare, FileCode, Wand2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -60,6 +60,8 @@ export default function Layout({ children, currentView, onViewChange }: LayoutPr
     { id: 'oncall', label: 'On-Call & Escalation', icon: Phone },
     { id: 'ai-assistant', label: 'Casey 1.0', icon: Sparkles },
     { id: 'schema-validator', label: 'Schema Validator', icon: GitCompare },
+    { id: 'icd-builder', label: 'ICD & Schema Builder', icon: FileCode },
+    { id: 'icd-assistant', label: 'ICD Assistant (AI)', icon: Wand2 },
     { id: 'documents', label: 'Documents', icon: FileText },
     { id: 'architecture', label: 'Architecture', icon: Network },
     { id: 'users', label: 'User Management', icon: Users, adminOnly: true },

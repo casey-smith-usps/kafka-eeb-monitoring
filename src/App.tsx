@@ -21,6 +21,8 @@ import { DataStreaming } from './components/DataStreaming';
 import { UserManagement } from './components/UserManagement';
 import { DataFreshness } from './components/DataFreshness';
 import SchemaValidator from './components/SchemaValidator';
+import AvroSchemaBuilder from './components/AvroSchemaBuilder';
+import ICDAssistant from './components/ICDAssistant';
 import { Topic } from './lib/supabase';
 
 function DashboardApp() {
@@ -122,6 +124,10 @@ function DashboardApp() {
         return <AIAssistant />;
       case 'schema-validator':
         return <SchemaValidator />;
+      case 'icd-builder':
+        return <AvroSchemaBuilder />;
+      case 'icd-assistant':
+        return <ICDAssistant />;
       case 'users':
         return (
           <ProtectedRoute requireAdmin={true}>
